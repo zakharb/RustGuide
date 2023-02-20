@@ -1,3 +1,7 @@
+# Content
+- [4.Ownership](#4-ownership)  
+- [5.Using Structs](#using-structs)  
+
 # 4 Ownership  
 
 ## What is Ownership  
@@ -350,3 +354,5 @@ assert_eq!(slice, &[2, 3]);
 ### Summary
 The concepts of ownership, borrowing, and slices ensure memory safety in Rust programs at compile time. The Rust language gives you control over your memory usage in the same way as other systems programming languages, but having the owner of data automatically clean up that data when the owner goes out of scope means you don’t have to write and debug extra code to get this control.
 
+
+# Using Structs
