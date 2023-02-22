@@ -1,20 +1,366 @@
 # Content  
+- [1 Getting Started](#1-getting-started)  
+- [2 Programming a Guessing Game](#2-programming-a-guessing-game)  
+- [3 Comming Programming Concepts](#3-comming-programming-concepts)  
 - [4 Ownership](#4-ownership)  
 - [5 Using Structs](#5-using-structs)  
 - [6 Enums and Pattern Matching](#6-enums-and-pattern-matching)  
+- [7 Packages Crates and Modules](#7-packages-crates-and-modules)  
+
+# 1
+
+## Installation
+Install
+```sh
+curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh
+```
+
+Check, update, uninstall
+```sh
+rustc --version
+rustup update
+rustup self uninstall
+```
+
+## Hello, World!
+It’s traditional when learning a new language to write a little program that prints the text `Hello, world!` to the screen, so we’ll do the same here!
+
+### Creating a Project Directory
+We suggest making a `projects directory` in your home directory and keeping all your projects there
+```sh
+mkdir ~/projects
+cd ~/projects
+mkdir hello_world
+cd hello_world
+```
+
+### Writing and Running a Rust Program
+Next, make a new source file and call it main.rs. 
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+Compile
+```sh
+rustc main.rs
+./main
+```
+
+### Anatomy of a Rust Program
+These lines define a function named `main`. The function body is wrapped in `{}`
+```rust
+fn main() {
+
+}
+```
+
+> If you want to stick to a standard style across Rust projects, you can use an automatic formatter tool called `rustfmt`
+
+- Rust style is to indent with `four spaces`, not a tab
+- println! calls a `Rust macro`
+- we pass string as an argument to `println!`
+- we end the line with a semicolon `(;)`
+
+### Compiling and Running Are Separate Steps
+Before running a Rust program, you must compile it using `rustc`
+```sh
+rustc main.rs
+```
+## Hello, Cargo!
+`Cargo` is Rust’s build system and `package manager`. 
+
+### Creating a Project with Cargo
+Let’s create a new project using Cargo
+```sh
+cargo new hello_cargo
+cd hello_cargo
+```
+
+Filename: Cargo.toml - Cargo’s configuration file.
+```tm
+[package]
+name = "hello_cargo"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+```
+
+### Building and Running a Cargo Project
+Build project 
+```sh
+cargo build
+```
+Because the default build is a debug build, Cargo puts the binary in a directory named debug. You can run the executable with this command:
+```sh
+./target/debug/hello_cargo
+```
+
+We can also use cargo run to compile the code and then `run` the resultant executable `all in one` command:
+```sh
+cargo run
+```
+
+This command quickly `checks` your code to make sure it compiles but doesn’t produce an executable
+```sh
+cargo check
+```
+
+### Building for Release
+When your project is finally ready for release, you can use command to compile it with optimizations.
+```sh
+cargo --build release
+```
+
+# 2 Programming a Guessing Game
+We’ll implement a classic beginner programming problem: a guessing game. Here’s how it works: the program will generate a random integer between 1 and 100. It will then prompt the player to enter a guess. After a guess is entered, the program will indicate whether the guess is too low or too high. If the guess is correct, the game will print a congratulatory message and exit.
+
+## Setting Up a New Project
+Go to the projects directory and make a `new project` using `Cargo`
+```sh
+cargo new guessing_game
+cd guessing_game
+```
+
+## Processing a Guess
+The first part of the guessing game program will ask for user input, process that input, and check that the input is in the expected form.
+```rust
+use std::io; //standard library, known as std
+
+fn main() { //the entry point
+    println!("Guess the number!"); //macro that prints a string to the screen
+
+    println!("Please input your guess."); // macro println!
+
+    let mut guess = String::new();
+
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    println!("You guessed: {guess}");
+}
+```
+
+### Storing Values with Variables
+Next, we’ll create a variable to store the user input, like this:
+```rust
+    let mut guess = String::new();
+```
+
+To make a variable mutable, we add mut before the variable name:
+```rust
+let apples = 5; // immutable
+let mut bananas = 5; // mutable
+```
+
+In full, the let mut guess = String::new(); line has created a mutable variable that is currently bound to a new, empty instance of a String:  
+- `let mut guess` will introduce a `mutable variable` named `guess`  
+- equal sign `(=)` tells Rust we want to `bind` something to the variable  
+- `::` syntax in the `::new` line indicates that new is an associated function of the `String` type  
+
+### Receiving User Input
+Call the `stdin` function from the `io` module, which will allow us to handle user `input`:
+```rust
+    io::stdin()
+        .read_line(&mut guess)
+```
+> If we hadn’t `imported` the io library with `use std::io`; at the beginning of the program, we could still use the function by writing this function call as `std::io::stdin`.
+
+Next, the line `.read_line(&mut guess)` calls the `read_line` method on the standard input handle to get `input` from the user
+
+The `&` indicates that this argument is a `reference`, which gives you a way to let multiple parts of your code access one piece of data without needing to copy that data into memory multiple times.
+
+### Handling Potential Failure with Result
+`One long line` is difficult to read, so it’s best to `divide` it
+The next part is this method
+```rust
+        .expect("Failed to read line");
+```
+As mentioned earlier, `read_line` puts whatever the user enters into the string we pass to it, but it also returns a `Result` value - `enum`.
+Result’s variants are `Ok` and `Err`.
+An instance of `Result` has an `expect` method:
+- if `Err` value, expect will cause the program to crash and display message  
+- if `Ok` value, expect will take the return value and return just it  
+> If you don’t call `expect`, the program will compile, but you’ll get a `warning`
+
+### Printing Values with println! Placeholders
+There’s only one more line to discuss in the code so far:
+ ```rust
+     println!("You guessed: {guess}");
+```
+> The `{}` set of curly brackets is a `placeholder`: think of {} as little crab pincers that hold a value in place.
+
+Printing a variable and the result of an expression in one call to println! would look like this:
+```rust
+let x = 5;
+let y = 10;
+
+println!("x = {x} and y + 2 = {}", y + 2); // "x = 5 and y = 12"
+```
+### Testing the First Part
+Let’s test the first part of the guessing game.
+```sh
+cargo run
+```
+
+## Generating a Secret Number
+Next, we need to generate a secret number that the user will try to guess.
+
+### Using a Crate to Get More Functionality
+The `rand` crate is a library crate, which contains code that is intended
+```sh
+[dependencies]
+rand = "0.8.5"
+```
+> The specifier 0.8.5 is actually shorthand for ^0.8.5, which means any version that is at least 0.8.5 but below 0.9.0.
+
+### Ensuring Reproducible Builds with the Cargo.lock File
+When you `build` a project for the `first time`, Cargo figures out all the versions of the dependencies that fit the criteria and then writes them to the `Cargo.lock` file. 
+
+### Updating a Crate to Get a New Version
+When you do want to update a crate, Cargo provides the `command update`, which will ignore the `Cargo.lock` file and figure out all the latest versions that fit your specifications in Cargo.toml. 
+```sh
+cargo update
+```
+
+### Generating a Random Number
+Let’s start using rand to generate a number to guess.
+```rust
+use std::io;
+use rand::Rng; //trait defines methods that random number generators implement
+
+fn main() {
+    println!("Guess the number!");
+
+    let secret_number = rand::thread_rng().gen_range(1..=100);
+
+    println!("The secret number is: {secret_number}");
+
+    println!("Please input your guess.");
+
+    let mut guess = String::new();
+
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    println!("You guessed: {guess}");
+}
+```
+> Another neat feature of Cargo is that running the `cargo doc --open` command will build documentation provided by all your dependencies locally and open it in your browser
+
+We call the `rand::thread_rng` function that gives us the particular random number generator we’re going to use: one that is local to the current thread of execution and is seeded by the operating system. Then we call the `gen_range` method on the random number generator. This method is defined by the `Rng trait` that we brought into scope with the `use rand::Rng;` statement. 
+
+## Comparing the Guess to the Secret Number
+Now that we have user input and a random number, we can compare them. 
+```rust
+use rand::Rng;
+use std::cmp::Ordering; 
+use std::io;
+
+fn main() {
+    // --snip--
+
+    println!("You guessed: {guess}");
+
+    match guess.cmp(&secret_number) {
+        Ordering::Less => println!("Too small!"),
+        Ordering::Greater => println!("Too big!"),
+        Ordering::Equal => println!("You win!"),
+    }
+}
+```
+First we add another use statement, bringing a type called `std::cmp::Ordering` into scope from the standard library. The Ordering type is another `enum` and has the variants `Less, Greater, and Equal`.
+
+The `cmp` method compares two values and can be called on anything that can be compared. It takes a `reference` to whatever you want to compare with: here it’s comparing `guess` to `secret_number`. 
+
+We use a `match` expression to decide what to do next based on which variant of `Ordering` was returned from the call to `cmp` with the values in `guess` and `secret_number`.
+
+> The core of the error states that there are `mismatched types`. Rust has a strong, static type system. However, it also has type inference. When we wrote `let mut guess = String::new()`, Rust was able to infer that guess should be a `String` and didn’t make us write the type.
+
+Ultimately, we want to `convert` the `String` the program reads as input into a `real number type` so we can compare it numerically to the secret number:
+```rust
+    // --snip--
+
+    let mut guess = String::new();
+
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    let guess: u32 = guess.trim().parse().expect("Please type a number!"); //convert str to u32
+
+    println!("You guessed: {guess}");
+
+    match guess.cmp(&secret_number) {
+        Ordering::Less => println!("Too small!"),
+        Ordering::Greater => println!("Too big!"),
+        Ordering::Equal => println!("You win!"),
+    }
+```
+> Rust allows us to `shadow` the previous value of guess with a new one. `Shadowing` lets us `reuse` the guess variable name rather than forcing us to create two unique variables, such as `guess_str` and `guess`
+
+The `parse` method on strings converts a string to `another type`. Here, we use it to convert from a string to a `number`. We need to tell Rust the exact number type we want by using `let guess: u32`.
+
+## Allowing Multiple Guesses with Looping
+The loop keyword creates an infinite loop.
+```rust
+    // --snip--
+
+    println!("The secret number is: {secret_number}");
+
+    loop {
+        println!("Please input your guess.");
+
+        // --snip--
+
+        match guess.cmp(&secret_number) {
+            Ordering::Less => println!("Too small!"),
+            Ordering::Greater => println!("Too big!"),
+            Ordering::Equal => println!("You win!"),
+        }
+    }
+}
+```
+### Handling Invalid Input
+We switch from an expect call to a match expression to move from crashing on an error to handling the error.
+```rust
+        // --snip--
+
+        io::stdin()
+            .read_line(&mut guess)
+            .expect("Failed to read line");
+
+        let guess: u32 = match guess.trim().parse() {
+            Ok(num) => num,
+            Err(_) => continue,
+        };
+
+        println!("You guessed: {guess}");
+
+        // --snip--
+```
+
+## Summary
+This project was a hands-on way to introduce you to many new Rust concepts: let, match, functions, the use of external crates, and more.
+
+# 3
 
 # 4 Ownership  
 
 ## What is Ownership  
-Ownership is a set of rules that govern how a Rust program manages memory. All programs have to manage the way they use a computer’s memory while running.
+Ownership is a set of rules that govern how a Rust program `manages` memory.
 
 ### The Stack and the Heap  
-Stack > 
-The stack stores values in the order it gets them and removes the values in the opposite order - `last in, first out`.
+The `stack` stores values in the order it gets them and removes the values in the opposite order - `last in, first out`.
 Like plates. Adding or removing plates from the middle or bottom wouldn’t work as well! Adding data is called pushing onto the stack, and removing data is called popping off the stack.
 
-Heap
-The heap is less organized: when you put data on the heap, you request a certain amount of space. The memory allocator finds an empty spot in the heap that is big enough, marks it as being in use, and returns a pointer, which is the address of that location - `allocating`
+The `heap` is less organized: when you put data on the heap, you request a certain amount of space. The memory allocator finds an empty spot in the heap that is big enough, marks it as being in use, and returns a pointer, which is the address of that location - `allocating`
 Like Restaurant. When you enter, you state the number of people in your group, and the host finds an empty table that fits everyone and leads you there. If someone in your group comes late, they can ask where you’ve been seated to find you.
 
 ### Ownership Rules  
@@ -682,7 +1028,7 @@ impl Rectangle {
 Structs let you create custom types that are meaningful for your domain. By using structs, you can keep associated pieces of data connected to each other and name each piece to make your code clear. In impl blocks, you can define functions that are associated with your type, and methods are a kind of associated function that let you specify the behavior that instances of your structs have.
 
 
-## 6 Enums and Pattern Matching
+# 6 Enums and Pattern Matching
 In this chapter, we’ll look at `enumerations`, also referred to as `enums`. Enums allow you to define a type by enumerating its possible `variants`. 
 
 ### Defining an Enum
@@ -983,7 +1329,7 @@ Or we could use an `if let` and `else` expression
 ## Summary
 We’ve now covered how to use enums to create custom types that can be one of a set of enumerated values. We’ve shown how the standard library’s `Option<T>` type helps you use the type system to prevent errors. When enum values have data inside them, you can use `match` or `if let` to extract and use those values, depending on how many cases you need to handle.
 
-## 7 Packages, Crates, and Modules
+# 7 Packages Crates and Modules
 Rust has a number of `features` that allow you to `manage` your code’s organization, including which details are exposed, which details are private, and what names are in each scope in your programs. These features, sometimes collectively referred to as the `module system`, include:
 
 - `Packages`: A Cargo feature that lets you build, test, and share crates
