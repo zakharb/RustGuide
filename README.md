@@ -982,3 +982,366 @@ Or we could use an `if let` and `else` expression
 
 ## Summary
 We’ve now covered how to use enums to create custom types that can be one of a set of enumerated values. We’ve shown how the standard library’s `Option<T>` type helps you use the type system to prevent errors. When enum values have data inside them, you can use `match` or `if let` to extract and use those values, depending on how many cases you need to handle.
+
+## 7 Packages, Crates, and Modules
+Rust has a number of `features` that allow you to `manage` your code’s organization, including which details are exposed, which details are private, and what names are in each scope in your programs. These features, sometimes collectively referred to as the `module system`, include:
+
+- `Packages`: A Cargo feature that lets you build, test, and share crates
+- `Crates`: A tree of modules that produces a library or executable
+- `Modules and use`: Let you control the organization, scope, and privacy of paths
+- `Paths`: A way of naming an item, such as a struct, function, or module
+
+### Packages and Crates
+A `crate` is the smallest amount of code that the Rust compiler `considers at a time`.
+A crate can come in one of two forms: a `binary crate` or a `library crate`.
+`Binary crates` are programs you can compile to an `executable` that you can run, such as a command-line program or a server - have function `main`
+`Library crates` don’t have `main` and define functionality intended to be shared with multiple projects
+```rust
+$ cargo new my-project
+     Created binary (application) `my-project` package
+$ ls my-project
+Cargo.toml
+src
+$ ls my-project/src
+main.rs
+```
+
+## Defining Modules to Control Scope and Privacy
+
+### Modules Cheat Sheet
+
+- `Start from the crate root`: When compiling a crate, the compiler first looks in the crate root file (usually `src/lib.rs` for a library crate or `src/main.rs` for a binary crate) for code to compile.
+
+- `Declaring modules`: In the crate root file, you can declare new modules; say, you declare a “garden” module with `mod garden;`. The compiler will look for the module’s code in these places:  
+-- Inline, within curly brackets that replace the semicolon following `mod garden`  
+-- In the file `src/garden.rs`  
+-- In the file `src/garden/mod.rs`  
+
+- `Declaring submodules`: In any file other than the crate root, you can declare submodules. For example, you might declare `mod vegetables;` in src/garden.rs. The compiler will look for the submodule’s code within the directory named for the parent module in these places:  
+-- Inline, directly following `mod vegetables`, within curly brackets instead of the semicolon  
+-- In the file `src/garden/vegetables.rs`  
+-- In the file `src/garden/vegetables/mod.rs`  
+
+- `Paths to code in modules`: Once a module is part of your crate, you can refer to code in that module from anywhere else in that same crate, as long as the privacy rules allow, using the path to the code. For example, an Asparagus type in the garden vegetables module would be found at `crate::garden::vegetables::Asparagus`.
+
+- `Private vs public`: Code within a module is private from its parent modules by default. To make a module public, declare it with `pub mod` instead of `mod`. To make items within a public module public as well, use pub before their declarations.
+
+- The `use` keyword: Within a scope, the use keyword creates shortcuts to items to reduce repetition of long paths. In any scope that can refer to `crate::garden::vegetables::Asparagus`, you can create a shortcut with use `crate::garden::vegetables::Asparagus;` and from then on you only need to write `Asparagus` to make use of that type in the scope.
+
+Here we create a binary crate named `backyard` that illustrates these rules. The crate’s directory, also named `backyard`, contains these files and directories:
+```rust
+backyard
+├── Cargo.lock
+├── Cargo.toml
+└── src
+    ├── garden
+    │   └── vegetables.rs
+    ├── garden.rs
+    └── main.rs
+```
+
+The crate root file in this case is `src/main.rs`, and it contains:
+```rust
+use crate::garden::vegetables::Asparagus;
+
+pub mod garden;
+
+fn main() {
+    let plant = Asparagus {};
+    println!("I'm growing {:?}!", plant);
+}
+```
+
+The `pub mod garden;` line tells the compiler to include the code it finds in `src/garden.rs`, which is:
+```rust
+pub mod vegetables;
+```
+Here, `pub mod vegetables;` means the code in `src/garden/vegetables.rs` is included too. That code is:
+```rust
+#[derive(Debug)]
+pub struct Asparagus {}
+```
+
+### Grouping Related Code in Modules
+`Modules` let us organize code within a crate for readability and easy reuse. Modules also allow us to control the `privacy` of items, because code within a module is `private by default`. 
+
+In the `restaurant industry`, some parts of a restaurant are referred to as `front of house` and others as `back of house`. Front of house is where customers are; this encompasses where the hosts seat customers, servers take orders and payment, and bartenders make drinks. Back of house is where the chefs and cooks work in the kitchen, dishwashers clean up, and managers do administrative work.
+
+Create a `new library` named restaurant by running `cargo new restaurant --lib`.
+Filename: `src/lib.rs`:
+```rust
+mod front_of_house {
+    mod hosting {
+        fn add_to_waitlist() {}
+
+        fn seat_at_table() {}
+    }
+
+    mod serving {
+        fn take_order() {}
+
+        fn serve_order() {}
+
+        fn take_payment() {}
+    }
+}
+```
+We define a module with the `mod keyword` followed by the name of the module (in this case, `front_of_house`).
+
+`src/main.rs` and `src/lib.rs` are called `crate roots`. The reason for their name is that the contents of either of these two files form a module named `crate` at the root of the crate’s module structure, known as the `module tree`.
+```rust
+crate
+ └── front_of_house
+     ├── hosting
+     │   ├── add_to_waitlist
+     │   └── seat_at_table
+     └── serving
+         ├── take_order
+         ├── serve_order
+         └── take_payment
+
+```
+The module tree might remind you of the `filesystem’s directory tree` on your computer; this is a very `apt` comparison!
+
+### Paths for Referring to an Item in the Module Tree
+A path can take two forms:
+
+- An `absolute path` is the full path starting from a crate root; for code from an external crate, the absolute path begins with the crate name, and for code from the current crate, it starts with the literal crate.
+- A `relative path` starts from the current module and uses `self`, `super`, or an identifier in the current module.
+> Our preference in general is to specify absolute paths because it’s more likely we’ll want to move code definitions and item calls independently of each other.
+
+Both absolute and relative paths are followed by one or more identifiers separated by double colons `(::)`.
+```rust
+mod front_of_house {
+    mod hosting {
+        fn add_to_waitlist() {}
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Absolute path
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // Relative path
+    front_of_house::hosting::add_to_waitlist();
+}
+```
+> We have the correct `paths` for the hosting `module` and the `add_to_waitlist` function, but Rust won’t let us use them because it `doesn’t have access` to the private sections. 
+
+### Exposing Paths with the pub Keyword
+We want the `eat_at_restaurant` function in the parent module to have access to the `add_to_waitlist` function in the child module, so we mark the hosting module with the `pub` keyword
+```rust
+mod front_of_house {
+    pub mod hosting {
+        fn add_to_waitlist() {}
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Absolute path
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // Relative path
+    front_of_house::hosting::add_to_waitlist();
+}
+```
+> The `pub` keyword on a module only lets code in its `ancestor modules` refer to it, not access its `inner code`
+
+Let’s also make the `add_to_waitlist` function `public` by adding the `pub` keyword before its definition
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Absolute path
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // Relative path
+    front_of_house::hosting::add_to_waitlist();
+}
+```
+> The module tree should be defined in src/lib.rs. Then, any public items can be used in the binary crate by starting paths with the name of the package. The binary crate becomes a user of the library crate just like a completely external crate would use the library crate: it can only use the public API. This helps you design a good API; not only are you the author, you’re also a client!
+
+### Starting Relative Paths with super
+We can construct relative paths that begin in the parent module, rather than the current module or the crate root, by using `super` at the start of the path.
+```rust
+fn deliver_order() {}
+
+mod back_of_house {
+    fn fix_incorrect_order() {
+        cook_order();
+        super::deliver_order();
+    }
+
+    fn cook_order() {}
+}
+```
+
+### Making Structs and Enums Public
+We can also use `pub` to designate `structs` and `enums` as `public`, but there are a few details extra to the usage of pub with structs and enums. 
+We’ve defined a `public` `back_of_house::Breakfast` struct with a `public` `toast` field but a `private` `seasonal_fruit` field
+```rust
+mod back_of_house {
+    pub struct Breakfast {
+        pub toast: String,
+        seasonal_fruit: String,
+    }
+
+    impl Breakfast {
+        pub fn summer(toast: &str) -> Breakfast {
+            Breakfast {
+                toast: String::from(toast),
+                seasonal_fruit: String::from("peaches"),
+            }
+        }
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Order a breakfast in the summer with Rye toast
+    let mut meal = back_of_house::Breakfast::summer("Rye");
+    // Change our mind about what bread we'd like
+    meal.toast = String::from("Wheat");
+    println!("I'd like {} toast please", meal.toast);
+
+    // The next line won't compile if we uncomment it; we're not allowed
+    // to see or modify the seasonal fruit that comes with the meal
+    // meal.seasonal_fruit = String::from("blueberries");
+}
+```
+
+In contrast, if we make an `enum` `public`, all of its variants are then `public`. We only need the `pub` before the enum keyword
+```rust
+mod back_of_house {
+    pub enum Appetizer {
+        Soup,
+        Salad,
+    }
+}
+
+pub fn eat_at_restaurant() {
+    let order1 = back_of_house::Appetizer::Soup;
+    let order2 = back_of_house::Appetizer::Salad;
+}
+```
+
+### Bringing Paths into Scope with the use Keyword
+We bring the `crate::front_of_house::hosting` module into the scope of the `eat_at_restaurant` function so we only have to specify `hosting::add_to_waitlist` to call the `add_to_waitlist` function in eat_at_restaurant
+** Note that use only creates the shortcut for the `particular scope` in which the `use` occurs.**
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+use crate::front_of_house::hosting;
+
+pub fn eat_at_restaurant() {
+    hosting::add_to_waitlist();
+}
+```
+> Adding `use` and a `path` in a scope is similar to creating a `symbolic link` in the filesystem.
+
+### Creating Idiomatic use Paths
+Specifying the `parent module` when calling the function makes it clear that the function isn’t `locally defined` while still minimizing repetition of the full path. 
+
+On the other hand, when bringing in `structs, enums, and other items` with `use`, it’s idiomatic to specify the `full path`.
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut map = HashMap::new();
+    map.insert(1, 2);
+}
+```
+> The exception to this idiom is if we’re bringing two items with the same name into scope with use statements, because Rust doesn’t allow that.
+
+### Providing New Names with the as Keyword
+There’s another solution to the problem of bringing two types of the same name into the same scope with `use`: after the path, we can specify `as` and a new local name, or alias, for the type. 
+```rust
+use std::fmt::Result;
+use std::io::Result as IoResult;
+
+fn function1() -> Result {
+    // --snip--
+}
+
+fn function2() -> IoResult<()> {
+    // --snip--
+}
+```
+
+### Re-exporting Names with pub use
+We can combine `pub` and `use`. This technique is called `re-exporting` because we’re bringing an item into scope but also making that item available for others to bring into their scope.
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+    }
+}
+
+pub use crate::front_of_house::hosting;
+
+pub fn eat_at_restaurant() {
+    hosting::add_to_waitlist();
+}
+```
+
+### Using External Packages
+To bring `rand` definitions into the scope of our package, we added a use line starting with the name of the crate
+```rust
+use rand::Rng;
+
+fn main() {
+    let secret_number = rand::thread_rng().gen_range(1..=100);
+}
+```
+
+with `HashMap` we would use this line:
+```rust
+use std::collections::HashMap;
+```
+
+### Using Nested Paths to Clean Up Large use Lists
+We can use nested paths to bring items into scope `in one line`
+```rust
+use std::{cmp::Ordering, io};
+use std::io::{self, Write};
+```
+
+### The Glob Operator
+If we want to bring `all` public items
+```rust
+use std::collections::*;
+```
+
+## Separating Modules into Different Files
+We’ll extract `modules` into `files` instead of having all the modules defined in the crate root file. 
+
+Filename: src/lib.rs
+```rust
+mod front_of_house;
+
+pub use crate::front_of_house::hosting;
+
+pub fn eat_at_restaurant() {
+    hosting::add_to_waitlist();
+}
+```
+
+Filename: src/front_of_house.rs
+```rust
+pub mod hosting;
+```
+
+Filename: src/front_of_house/hosting.rs
+```rust
+pub fn add_to_waitlist() {}
+```
+
+## Summary
+Rust lets you split a `package` into multiple `crates` and a crate into `modules` so you can refer to items defined in one module from another module. You can do this by specifying `absolute` or `relative` paths. These paths can be brought into scope with a `use` statement so you can use a shorter path for multiple uses of the item in that scope. Module code is `private by default`, but you can make definitions public by adding the `pub` keyword.
