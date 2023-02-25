@@ -7,7 +7,7 @@
 - [6 Enums and Pattern Matching](#6-enums-and-pattern-matching)  
 - [7 Packages Crates and Modules](#7-packages-crates-and-modules)  
 
-# 1
+# 1 Getting Started
 
 ## Installation
 Install
@@ -133,15 +133,11 @@ use std::io; //standard library, known as std
 
 fn main() { //the entry point
     println!("Guess the number!"); //macro that prints a string to the screen
-
     println!("Please input your guess."); // macro println!
-
     let mut guess = String::new();
-
     io::stdin()
         .read_line(&mut guess)
         .expect("Failed to read line");
-
     println!("You guessed: {guess}");
 }
 ```
@@ -286,17 +282,12 @@ We use a `match` expression to decide what to do next based on which variant of 
 Ultimately, we want to `convert` the `String` the program reads as input into a `real number type` so we can compare it numerically to the secret number:
 ```rust
     // --snip--
-
     let mut guess = String::new();
-
     io::stdin()
         .read_line(&mut guess)
         .expect("Failed to read line");
-
     let guess: u32 = guess.trim().parse().expect("Please type a number!"); //convert str to u32
-
     println!("You guessed: {guess}");
-
     match guess.cmp(&secret_number) {
         Ordering::Less => println!("Too small!"),
         Ordering::Greater => println!("Too big!"),
@@ -311,14 +302,10 @@ The `parse` method on strings converts a string to `another type`. Here, we use 
 The loop keyword creates an infinite loop.
 ```rust
     // --snip--
-
     println!("The secret number is: {secret_number}");
-
     loop {
         println!("Please input your guess.");
-
         // --snip--
-
         match guess.cmp(&secret_number) {
             Ordering::Less => println!("Too small!"),
             Ordering::Greater => println!("Too big!"),
@@ -331,25 +318,385 @@ The loop keyword creates an infinite loop.
 We switch from an expect call to a match expression to move from crashing on an error to handling the error.
 ```rust
         // --snip--
-
         io::stdin()
             .read_line(&mut guess)
             .expect("Failed to read line");
-
         let guess: u32 = match guess.trim().parse() {
             Ok(num) => num,
             Err(_) => continue,
         };
-
         println!("You guessed: {guess}");
-
         // --snip--
 ```
 
 ## Summary
 This project was a hands-on way to introduce you to many new Rust concepts: let, match, functions, the use of external crates, and more.
 
-# 3
+# 3 Common Programming Concepts
+This chapter covers concepts that appear in almost every programming language and how they work in Rust.
+
+## Variables and Mutability
+By default, variables are `immutable`
+When a variable is immutable, once a value is bound to a name, you `can’t change` that value.
+```rust
+fn main() {
+    let x = 5;
+    println!("The value of x is: {x}");
+    x = 6;
+    println!("The value of x is: {x}");
+}
+```
+Although variables are immutable by default, you can make them mutable by adding `mut` in front of the variable name 
+```rust
+fn main() {
+    let mut x = 5;
+    println!("The value of x is: {x}");
+    x = 6;
+    println!("The value of x is: {x}");
+}
+```
+
+### Constants
+Like `immutable variables`, constants are values that are bound to a name and `are not allowed to change`, but there are a few `differences` between constants and variables.
+- `aren’t allowed to use mut` with constants.
+- may be set only to a `constant expression`, not the result of a value that could only be computed at runtime.
+```rust
+const THREE_HOURS_IN_SECONDS: u32 = 60 * 60 * 3;
+```
+Rust’s naming convention for constants is to use `all uppercase with underscores` between words
+
+### Shadowing
+You can declare a new variable with `the same name` as a previous variable - the first variable is `shadowed` by the second
+We can shadow a variable by using the same variable’s name and repeating the use of the `let` keyword as follows
+```rust
+fn main() {
+    let x = 5;
+    let x = x + 1;
+    {
+        let x = x * 2;
+        println!("The value of x in the inner scope is: {x}");
+    }
+    println!("The value of x is: {x}");
+}
+```
+
+Shadowing is `different` from marking a variable as `mut` because
+- we’ll get a compile-time error if we accidentally try to reassign to this variable without using the `let` keyword
+- we’re effectively creating a new variable when we use the `let` keyword again, we can change the type of the value but reuse the same name
+```rust
+    let spaces = "   "; // str
+    let spaces = spaces.len(); // int
+```
+
+## Data Types
+Every value in Rust is of a certain `data type`, which tells Rust what kind of data is being specified so it knows how to work with that data. 
+Keep in mind that Rust is a `statically typed language`
+```rust
+let guess: u32 = "42".parse().expect("Not a number!");
+```
+
+### Scalar Types
+A scalar type represents a single value. Rust has four primary scalar types: 
+- integers  
+- floating point numbers  
+- booleans  
+- characters  
+
+### Integer Types
+An integer is a number without a fractional component `i8 i16 i32 i64 i128`, `u8 u16 u32 u64 u128`
+the `isize` and `usize` types depend on the architecture of the computer 
+
+### Floating-Point Types
+Rust also has two primitive types for floating-point numbers, which are numbers with decimal points. Rust’s floating-point types are `f32` and `f64`
+```rust
+fn main() {
+    let x = 2.0; // f64
+    let y: f32 = 3.0; // f32
+}
+```
+
+### Numeric Operations
+```rust
+fn main() {
+    // addition
+    let sum = 5 + 10;
+    // subtraction
+    let difference = 95.5 - 4.3;
+    // multiplication
+    let product = 4 * 30;
+    // division
+    let quotient = 56.7 / 32.2;
+    let truncated = -5 / 3; // Results in -1
+    // remainder
+    let remainder = 43 % 5;
+}
+```
+
+### The Boolean Type
+As in most other programming languages, a Boolean type in Rust has two possible values: `true` and `false`.
+```rust
+fn main() {
+    let t = true;
+    let f: bool = false; // with explicit type annotation
+}
+```
+
+### The Character Type
+Rust’s `char` type is the language’s most primitive alphabetic type.
+```rust
+fn main() {
+    let c = 'z';
+    let z: char = 'ℤ'; // with explicit type annotation
+    let heart_eyed_cat = '😻';
+}
+```
+
+### Compound Types
+Compound types can group multiple values into one type. Rust has two primitive compound types: `tuples` and `arrays`.
+
+### The Tuple Type
+A `tuple` is a general way of grouping together a number of values with a variety of types into `one` compound type. 
+```rust
+fn main() {
+    let tup: (i32, f64, u8) = (500, 6.4, 1);
+}
+```
+The variable tup binds to the entire tuple because a tuple is considered a single compound element. To get the individual values out of a tuple, we can use pattern matching to destructure a tuple value, like this:
+```rust
+fn main() {
+    let tup = (500, 6.4, 1);
+    let (x, y, z) = tup;
+    println!("The value of y is: {y}");
+}
+```
+We can also access a tuple element directly by using a period `(.)` followed by the index of the value we want to access
+```rust
+fn main() {
+    let x: (i32, f64, u8) = (500, 6.4, 1);
+    let five_hundred = x.0;
+    let six_point_four = x.1;
+    let one = x.2;
+}
+```
+The tuple without any values has a special name, `unit`.
+
+### The Array Type
+Unlike a tuple, every element of an array must have the `same type`. Unlike arrays in some other languages, arrays in Rust have a `fixed length`.
+```rust
+fn main() {
+    let a = [1, 2, 3, 4, 5];
+    let a: [i32; 5];
+    let a = [3; 5];
+}
+```
+A `vector` is a similar collection type provided by the standard library that is allowed to `grow or shrink` in size
+
+### Accessing Array Elements
+An array is a single chunk of memory of a known, `fixed` size that can be `allocated` on the `stack`. You can access elements of an array using `indexing`
+```rust
+fn main() {
+    let a = [1, 2, 3, 4, 5];
+    let first = a[0];
+    let second = a[1];
+}
+```
+
+### Invalid Array Element Access
+Rust will `check` that the index you’ve specified is `less than` the array `length`. If the index is greater than or equal to the length, Rust will `panic`. 
+This is an example of Rust’s memory `safety principles` in action. In many low-level languages, this kind of check is not done, and when you provide an `incorrect` index, invalid memory `can be accessed`. 
+
+## Functions
+`main` function, which is the `entry point` of many programs. You’ve also seen the `fn` keyword, which allows you to declare new functions.
+Rust code uses `snake case` as the conventional `style` for function and variable names, in which all letters are lowercase and underscores separate words
+```rust
+fn main() {
+    println!("Hello, world!");
+    another_function();
+}
+fn another_function() {
+    println!("Another function.");
+}
+```
+
+### Parameters
+We can define functions to have `parameters`
+```rust
+fn main() {
+    another_function(5);
+}
+fn another_function(x: i32) { //The type of x is specified as i32
+    println!("The value of x is: {x}");
+}
+```
+In function signatures, you must declare the `type` of each `parameter`
+When defining `multiple parameters`, separate the parameter declarations with `commas`
+
+### Statements and Expressions
+Rust is an `expression-based` language
+- Statements are instructions that perform some action and do not return a value  
+- Expressions evaluate to a resultant value  
+
+Creating a variable and assigning a value to it with the let keyword is a statement
+```rust
+fn main() {
+    let y = 6;
+}
+```
+
+Statements do not return values. Therefore, you `can’t assign a let` statement to another variable, as the following code tries to do; you’ll get an `error`
+```rust
+fn main() {
+    let x = (let y = 6);
+}
+```
+The `let y = 6` statement does `not return` a value, so there isn’t anything for `x` to bind to
+`Expressions` evaluate to a value and make up most of the `rest of the code` that you’ll write in Rust. Calling a function is an expression. Calling a macro is an expression. A new scope block created with curly brackets is an expression
+
+
+`Expressions` do not include `ending semicolons`. If you `add a semicolon` to the end of an expression, you `turn` it into a `statement`, and it will then not return a value.
+```rust
+{
+    let x = 3;
+    x + 1
+}
+```
+
+### Functions with Return Values
+We `don’t name` return values, but we must `declare` their `type` after an arrow `(->)`.
+In Rust, the `return value` of the function is synonymous with the value of the `final expression` in the block of the body of a function.
+You can return `early` from a function by using the `return`
+```rust
+fn five() -> i32 { // declare only return Type
+    5 // no ; or return word
+}
+```
+
+But if we place a `semicolon` at the end of the line containing x + 1, `changing` it from an `expression` to a `statement` - wll be error statements don’t evaluate to a value, which is expressed by (), the unit type
+```rust
+fn plus_one(x: i32) -> i32 {
+    x + 1; // error here, return unit type - ()
+}
+```
+
+## Comments
+```rust
+// So we’re doing something complicated here, long enough that we need
+// multiple lines of comments to do it! Whew! Hopefully, this comment will
+// explain what’s going on.
+
+fn main() {
+    // I’m feeling lucky today
+    let lucky_number = 7;
+}
+```
+
+## Control Flow
+The most common constructs that let you control the flow of execution of Rust code are `if` expressions and `loops`.
+
+### if Expressions
+```rust
+fn main() {
+    let number = 3;
+    if number < 5 {
+        println!("condition was true");
+    } else {
+        println!("condition was false");
+    }
+}
+```
+ Unlike languages such as Ruby and JavaScript, Rust will `not automatically` try to `convert` `non-Boolean` types `to a Boolean`. You must be `explicit` and always provide if with a `Boolean as its condition`.
+ ```rust
+ fn main() {
+    let number = 3;
+    if number != 0 {
+        println!("number was something other than zero");
+    }
+}
+``` 
+
+### Handling Multiple Conditions with else if
+Using `too many else if` expressions can `clutter` your code, so if you have more than one - use `match`
+
+### Using if in a let Statement
+Because `if` is an `expression`, we can use it on the `right side` of a `let` statement to assign the outcome to a variable
+```rust
+fn main() {
+    let condition = true;
+    let number = if condition { 5 } else { 6 };
+    println!("The value of number is: {number}");
+}
+```
+
+## Repetition with Loops
+
+Rust has three kinds of loops: `loop`, `while`, and `for`. Let’s try each one.
+
+### Repeating Code with loop
+You can place the `break` keyword within the loop to tell the program when to stop 
+We also used `continue` in the guessing game, which in a loop tells the program to skip over any remaining code in this iteration of the loop and go to the next iteration.
+
+### Returning Values from Loops
+You can `add the value` you want returned `after the break` expression you use to stop the loop
+```rust
+fn main() {
+    let mut counter = 0;
+    let result = loop {
+        counter += 1;
+        if counter == 10 {
+            break counter * 2;
+        }
+    };
+    println!("The result is {result}");
+}
+```
+
+### Loop Labels to Disambiguate Between Multiple Loops
+You can optionally specify a loop `label` on a loop that you can then use with `break` or `continue`
+```rust
+fn main() {
+    let mut count = 0;
+    'counting_up: loop {
+        println!("count = {count}");
+        let mut remaining = 10;
+        loop {
+            println!("remaining = {remaining}");
+            if remaining == 9 {
+                break; // break internal loop
+            }
+            if count == 2 {
+                break 'counting_up; // break external loop
+            }
+            remaining -= 1;
+        }
+        count += 1;
+    }
+    println!("End count = {count}");
+}
+```
+
+### Conditional Loops with while
+A program will `often need` to evaluate a `condition` within a loop. While the condition is true, the loop runs.
+```rust
+fn main() {
+    let mut number = 3;
+    while number != 0 {
+        println!("{number}!");
+        number -= 1;
+    }
+    println!("LIFTOFF!!!");
+}
+```
+
+### Looping Through a Collection with for
+You can use a `for` loop and execute some code for `each item` in a `collection`.
+```rust
+fn main() {
+    let a = [10, 20, 30, 40, 50];
+    for element in a {
+        println!("the value is: {element}");
+    }
+}
+```
 
 # 4 Ownership  
 
