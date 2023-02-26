@@ -7,6 +7,7 @@
 - [6 Enums and Pattern Matching](#6-enums-and-pattern-matching)  
 - [7 Packages Crates and Modules](#7-packages-crates-and-modules)  
 - [8 Common Collections](#8-common-collections)  
+- [9 Error Handling](#9-error-handling)  
 
 # 1 Getting Started
 
@@ -2327,4 +2328,229 @@ Updating a Value Based on the Old Value
 
 ### Hashing Functions
 By default, HashMap uses a hashing function called `SipHash` 
+
+# Error Handling
+Rust groups errors into `two` major categories: `recoverable` and `unrecoverable errors`. For a recoverable error, such as a `file not found` error, we most likely just `want to report` the problem to the user and retry the operation. Unrecoverable errors are always symptoms of `bugs`, like `trying to access a location beyond the end of an array`, and so we want to immediately `stop` the program.
+Rust `doesn’t have exceptions`. Instead, it has the type `Result<T, E>` for `recoverable` errors and the `panic!` macro that stops execution when the program encounters an `unrecoverable error`.
+
+## Unrecoverable Errors with panic!
+By default, when a panic occurs, the program starts unwinding, which means Rust walks back up the stack and cleans up the data from each function it encounters. However, this walking back and cleanup is a lot of work. Rust, therefore, allows you to choose the alternative of immediately aborting, which ends the program without cleaning up.
+```
+//Cargo.toml file
+[profile.release]
+panic = 'abort'
+```
+Sometimes, bad things happen in your code, and there’s nothing you can do about it. In these cases, Rust has the `panic!` macro
+```rust
+fn main() {
+    panic!("crash and burn");
+}
+```
+
+### Using a panic! Backtrace
+We can set the `RUST_BACKTRACE` environment variable to get a backtrace of exactly what happened to cause the error. A backtrace is a list of all the functions that `have been called to get to this point`.
+```sh
+RUST_BACKTRACE=1 cargo run
+```
+> Debug symbols are `enabled by default` when using cargo build or cargo run without the `--release` flag, as we have here.
+
+### Recoverable Errors with Result
+Most errors aren’t serious enough to require the program to stop entirely.
+```rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+```
+
+We need to `add` to the code to take `different actions depending` on the `value` File::open `returns`
+```rust
+use std::fs::File;
+fn main() {
+    let greeting_file_result = File::open("hello.txt");
+    let greeting_file = match greeting_file_result {
+        Ok(file) => file, // return inner file
+        Err(error) => panic!("Problem opening the file: {:?}", error), // panic
+    };
+}
+```
+
+### Matching on Different Errors
+We want to take `different actions` for different failure reasons: `if File::open failed` because the file doesn’t exist, `we want to create` the file and return the handle to the new file
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+
+fn main() {
+    let greeting_file_result = File::open("hello.txt");
+
+    let greeting_file = match greeting_file_result {
+        Ok(file) => file,
+        Err(error) => match error.kind() { // different kinds of errors
+            ErrorKind::NotFound => match File::create("hello.txt") { // if not found try to create file
+                Ok(fc) => fc,
+                Err(e) => panic!("Problem creating the file: {:?}", e), // panic if failed
+            },
+            other_error => {
+                panic!("Problem opening the file: {:?}", other_error); // in other kind panic
+            }
+        },
+    };
+}
+```
+
+The `match` expression is very useful but also very much a `primitive`. Here’s `another way` to write the same logic this time using `closures` and the `unwrap_or_else` method
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+fn main() {
+    let greeting_file = File::open("hello.txt").unwrap_or_else(|error| {
+        if error.kind() == ErrorKind::NotFound {
+            File::create("hello.txt").unwrap_or_else(|error| {
+                panic!("Problem creating the file: {:?}", error);
+            })
+        } else {
+            panic!("Problem opening the file: {:?}", error);
+        }
+    });
+}
+```
+
+### Shortcuts for Panic on Error: unwrap and expect
+If the `Result` value is the `Ok` variant, `unwrap` will `return` the value inside the `Ok`. If the Result is the `Err` variant, unwrap will call the `panic!` macro for us.
+```rust
+use std::fs::File;
+fn main() {
+    let greeting_file = File::open("hello.txt").unwrap();
+}
+```
+
+Similarly, the `expect` method lets us also `choose` the `panic!` error message. Using `expect instead of unwrap` and providing good error messages can convey your intent and `make tracking` down the source of a `panic easier`. 
+```rust
+use std::fs::File;
+fn main() {
+    let greeting_file = File::open("hello.txt")
+        .expect("hello.txt should be included in this project");
+}
+```
+> In production-quality code, most Rustaceans choose `expect rather than unwrap`
+
+### Propagating Errors
+When a function’s implementation calls something `that might fail`, instead of handling the error within the function itself, you can `return the error` to the `calling code` so that it can decide what to do. This is known as `propagating`
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+fn read_username_from_file() -> Result<String, io::Error> {
+    let username_file_result = File::open("hello.txt");
+    let mut username_file = match username_file_result {
+        Ok(file) => file,
+        Err(e) => return Err(e),
+    };
+    let mut username = String::new();
+    match username_file.read_to_string(&mut username) {
+        Ok(_) => Ok(username), // return String if all ok
+        Err(e) => Err(e), // return Error if cant read
+    }
+}
+```
+> It’s up to the calling code to decide what to do with those values. If the calling code gets an Err value, it could call panic! and crash the program, use a default username, or look up the username from somewhere other than a file, for example.
+
+### A Shortcut for Propagating Errors: the ? Operator
+This pattern of `propagating` errors is so `common in Rust` that Rust provides the question mark operator `?` to make this easier.
+```rust
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username_file = File::open("hello.txt")?;
+    let mut username = String::new();
+    username_file.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+> `error type` received is `converted` into the error type defined in the `return type` of the `current function` - function returns `one error type` to represent all the ways a function might fail
+
+The `?` operator eliminates a lot of boilerplate and `makes` this function’s `implementation simpler`.
+```rust
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username = String::new();
+    File::open("hello.txt")?.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+> If the value is an `Err`, the Err will be `returned` from the `whole function` as if we had used the `return` keyword so the error value gets propagated to the calling code.
+
+`Reading a file` into a string is a fairly `common operation`, so the standard library provides the convenient `fs::read_to_string`
+```rust
+fn read_username_from_file() -> Result<String, io::Error> {
+    fs::read_to_string("hello.txt")
+}
+```
+
+### Where The ? Operator Can Be Used
+The `?` operator can only be `used` in functions whose `return` type is `compatible` with the value the ? is used on.
+The `error message` also mentioned that ? `can be used` with `Option<T>` values as well.
+```rust
+fn last_char_of_first_line(text: &str) -> Option<char> {
+    text.lines().next()?.chars().last()
+}
+```
+> As with using ? on Result, you can only `use ?` on `Option` in a function that `returns an Option`
+
+Luckily, `main can also return a Result<(), E>`
+``` rust
+use std::error::Error;
+use std::fs::File;
+fn main() -> Result<(), Box<dyn Error>> {
+    let greeting_file = File::open("hello.txt")?;
+    Ok(())
+}
+```
+> you can read `Box<dyn Error>` to mean `any kind of error`
+
+When a `main` function `returns` a `Result<(), E>`, the executable will exit with a value of `0` if main returns `Ok(())` and will exit with a `nonzero` value if main returns an `Err` value. 
+
+## To panic! or Not to panic!
+You could call `panic!` for `any error` situation, whether there’s a possible way to recover or not, but then you’re `making` the decision that a `situation` is `unrecoverable` on behalf of the calling code. When you choose to return a `Result` value, you `give` the calling code `options`. 
+
+### Examples, Prototype Code, and Tests
+When you’re writing an `example` to illustrate some concept, also including robust `error-handling code` can make the example `less clear`. 
+Similarly, the `unwrap and expect` methods are very `handy` when `prototyping`, before you’re ready to decide how to handle errors.
+If a method call fails in a `test`, you’d want the `whole test to fail`, even if that method isn’t the functionality under test.
+
+### Cases in Which You Have More Information Than the Compiler
+If you can ensure by manually inspecting the code that you’ll `never have an Err variant`, it’s perfectly acceptable to call unwrap, and even `better to document the reason` you think you’ll never have an Err variant in the `expect` text
+```rust
+    let home: IpAddr = "127.0.0.1"
+        .parse()
+        .expect("Hardcoded IP address should be valid");
+```
+
+### Guidelines for Error Handling
+In cases where continuing could be `insecure or harmful`, the `best choice` might be to `call panic!` and alert the person using your library to the bug in their code so they can fix it during development.
+However, when `failure is expected`, it’s more appropriate to `return a Result` than to make a panic! call.
+When your code performs an operation that `could put a user at risk` if it’s called using `invalid values`, your code should `verify the values are valid first` and `panic` if the values aren’t valid. 
+> you can use `Rust’s type system` (and thus the type checking done by the compiler) to do `many of the checks` for you.
+
+### Creating Custom Types for Validation
+Let’s take the idea of using `Rust’s type system` to ensure we have a `valid value` one step further and look at creating a custom type for validation.
+`One way` to do this would be to parse the guess as an i32 instead of only a u32 to allow potentially negative numbers, and then `add a check everywhere` for the number being in range
+`Instead`, we can `make a new type` and put the validations in a function to create an instance of the type rather than repeating the validations everywhere.
+```rust
+pub struct Guess { //define a struct that has a field named value that holds an i32
+    value: i32,
+}
+impl Guess {
+    pub fn new(value: i32) -> Guess { // creates instances of Guess values
+        if value < 1 || value > 100 { // check if value correct
+            panic!("Guess value must be between 1 and 100, got {}.", value); // panic if not
+        }
+        Guess { value } // return if all ok
+    }
+    pub fn value(&self) -> i32 { // getter, because value is private
+        self.value
+    }
+}
+```
+> A function that has a parameter or returns only numbers between 1 and 100 could then declare in its signature that it takes or returns a `Guess rather than an i32` and wouldn’t need to do any `additional checks` in its body.
+
+## Summary
+Rust’s error handling features are designed to help you write more robust code. The panic! macro signals that your program is in a state it can’t handle and lets you tell the process to stop instead of trying to proceed with invalid or incorrect values. The Result enum uses Rust’s type system to indicate that operations might fail in a way that your code could recover from. You can use Result to tell code that calls your code that it needs to handle potential success or failure as well. Using panic! and Result in the appropriate situations will make your code more reliable in the face of inevitable problems.
 
