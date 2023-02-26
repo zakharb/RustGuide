@@ -6,6 +6,8 @@
 - [5 Using Structs](#5-using-structs)  
 - [6 Enums and Pattern Matching](#6-enums-and-pattern-matching)  
 - [7 Packages Crates and Modules](#7-packages-crates-and-modules)  
+- [8 Common Collections](#8-common-collections)  
+- [9 Error Handling](#9-error-handling)  
 
 # 1 Getting Started
 
@@ -2038,3 +2040,517 @@ pub fn add_to_waitlist() {}
 
 ## Summary
 Rust lets you split a `package` into multiple `crates` and a crate into `modules` so you can refer to items defined in one module from another module. You can do this by specifying `absolute` or `relative` paths. These paths can be brought into scope with a `use` statement so you can use a shorter path for multiple uses of the item in that scope. Module code is `private by default`, but you can make definitions public by adding the `pub` keyword.
+
+
+# 8 Common Collections
+Most other data types represent one specific value, but collections can contain multiple values. Unlike the built-in array and tuple types, the data these collections point to is stored on the heap, which means the amount of data does not need to be known at compile time and can grow or shrink as the program runs.  
+- A `vector` allows you to store a variable number of values next to each other.
+- A `string` is a collection of characters. We’ve mentioned the String type previously, but in this chapter we’ll talk about it in depth.
+- A `hash map` allows you to associate a value with a particular key. It’s a particular implementation of the more general data structure called a map.
+
+## Storing Lists of Values with Vectors
+The first collection type we’ll look at is `Vec<T>`, also known as a `vector`.
+To create a new empty vector, we call the `Vec::new` function,
+```rust
+    let v: Vec<i32> = Vec::new();
+    let v = vec![1, 2, 3];
+```
+
+### Updating a Vector
+To create a vector and then add elements to it, we can use the `push` method,
+```rust
+    let mut v = Vec::new();
+    v.push(5);
+    v.push(6);
+```
+
+### Reading Elements of Vectors
+There are `two` ways `to reference` a value stored in a vector: via `indexing` or using the `get`
+```rust
+    let v = vec![1, 2, 3, 4, 5];
+
+    let third: &i32 = &v[2]; // using index
+    println!("The third element is {third}");
+
+    let third: Option<&i32> = v.get(2); // using get
+    match third {
+        Some(third) => println!("The third element is {third}"),
+        None => println!("There is no third element."),
+    }
+```
+`Indexing` - this method is best used when you want your program to crash if there’s an attempt to access an element past the end of the vector.
+When the `get` method is passed an index that is outside the vector, it returns None `without panicking`.
+
+### Iterating over the Values in a Vector
+To `access each element` in a vector in turn, we would iterate through all of the elements rather than use indices to access one at a time with `for loop`
+```rust
+    let v = vec![100, 32, 57];
+    for i in &v {
+        println!("{i}");
+    }
+```
+
+We can also `iterate` over `mutable` references
+```rust
+    let mut v = vec![100, 32, 57];
+    for i in &mut v {
+        *i += 50;
+    }
+
+```
+
+### Using an Enum to Store Multiple Types
+When we need `one type` to represent `elements of different types`, we can define and use an `enum`
+```rust
+    enum SpreadsheetCell {
+        Int(i32),
+        Float(f64),
+        Text(String),
+    }
+
+    let row = vec![
+        SpreadsheetCell::Int(3),
+        SpreadsheetCell::Text(String::from("blue")),
+        SpreadsheetCell::Float(10.12),
+    ];
+```
+
+### Dropping a Vector Drops Its Elements
+Like any other struct, a vector is freed when it goes out of scope
+```rust
+    {
+        let v = vec![1, 2, 3, 4];
+
+        // do stuff with v
+    } // <- v goes out of scope and is freed here
+```
+
+## Storing UTF-8 Encoded Text with Strings
+New Rustaceans commonly get stuck on strings for a combination of three reasons: 
+- Rust’s propensity for exposing possible errors  
+- strings being a more complicated data structure than many programmers give them credit for  
+- and UTF-8  
+
+### What Is a String?
+Rust has only one string type in the core language, which is the string slice `str` that is usually seen in its borrowed form `&str`
+The `String` type, which is provided by Rust’s `standard library` rather than coded into the core language, is a `growable`, `mutable`, `owned`, `UTF-8` encoded string type. 
+
+### Creating a New String
+Many of the `same operations` available with `Vec<T>` are available with `String` as well, because String is actually implemented as a `wrapper around a vector` of bytes with some extra guarantees, restrictions, and capabilities.
+```rust
+    let mut s = String::new();
+```
+
+Often, we’ll have some `initial data` that we want to start the string with. For that, we `use` the `to_string` method, which is available on any type that implements the `Display` trait
+```rust
+    let data = "initial contents";
+
+    let s = data.to_string();
+
+    // the method also works on a literal directly:
+    let s = "initial contents".to_string();
+```
+
+We `can also` use the function `String::from` to create a String from a string literal.
+```rust
+    let s = String::from("initial contents");
+```
+> In this case, `String::from` and `to_string` do the `same` thing, so which you choose is a matter of style and readability.
+
+### Updating a String
+A String `can grow` in size and its contents can change, just like the contents of a `Vec<T>`, if you `push` more data into it. In addition, you can conveniently use the `+` operator or the `format!` macro to concatenate String values.
+
+We can `grow` a String by using the `push_str` method to
+```rust
+    let mut s = String::from("foo");
+    s.push_str("bar");
+```
+> The push_str method takes a string slice and `don’t take ownership` of the parameter
+
+The `push` method takes a `single character` as a parameter and adds it to the String.
+```rust
+    let mut s = String::from("lo");
+    s.push('l');
+```
+
+Often, you’ll want to `combine two` existing strings. One way to do so is to `use` the `+` operator
+```rust
+    let s1 = String::from("Hello, ");
+    let s2 = String::from("world!");
+    let s3 = s1 + &s2; // note s1 has been moved here and can no longer be used
+```
+> The string s3 will contain Hello, world!. The reason `s1` is `no longer valid` after the addition, and the reason we used a `reference to s2`, has to do with the signature of the `method` that’s called when we use the + operator. The `+` operator `uses` the `add` method
+
+If we need to concatenate multiple strings, the behavior of the + operator gets unwieldy. 
+For more `complicated string` combining, we can instead `use` the `format!` macro:
+```rust
+    let s1 = String::from("tic");
+    let s2 = String::from("tac");
+    let s3 = String::from("toe");
+
+    let s = format!("{s1}-{s2}-{s3}");
+```
+
+### Indexing into Strings
+Rust strings `don’t support indexing`
+A `String` is a wrapper over a `Vec<u8>`.
+Sometimes `UTF-8` stores as `1 byte`, sometimes with Unicode scalar value as `2 bytes`.
+To avoid `returning an unexpected value` and causing `bugs` that might not be discovered immediately, Rust doesn’t compile this code at all and prevents misunderstandings early in the development process.
+
+### Bytes and Scalar Values and Grapheme Clusters! Oh My!
+Another point about `UTF-8` is that there are actually `three` relevant `ways to look` at strings from Rust’s perspective: `as bytes`, `scalar values`, and `grapheme clusters`
+> A final reason Rust `doesn’t allow us to index` into a String to get a character is that indexing operations are expected to always take constant time (O(1)). But it isn’t possible to guarantee that performance with a String, because `Rust would have to walk through the contents from the beginning to the index` to determine `how many valid` characters there were.
+
+### Slicing Strings
+`Indexing` into a string is `often a bad idea` because it’s `not clear` what the return type of the string-indexing `operation should be`: a byte value, a character, a grapheme cluster, or a string slice.
+
+### Methods for Iterating Over Strings
+The `best way` to operate on pieces of strings is to be `explicit` about whether you want `characters or bytes`. For individual Unicode scalar values, use the `chars` method.
+```rust
+for c in "Зд".chars() {
+    println!("{c}");
+}
+```
+Alternatively, the `bytes` method returns each `raw byte`
+```rust
+for b in "Зд".bytes() {
+    println!("{b}");
+}
+```
+
+### Strings Are Not So Simple
+To summarize, `strings are complicated`. Different programming languages make different choices about how to present this complexity to the programmer. Rust has chosen to make the `correct handling of String data the default` behavior for all Rust programs, which means programmers have to put more thought into `handling UTF-8` data upfront
+
+## Storing Keys with Associated Values in Hash Maps
+The type `HashMap<K, V>` stores a mapping of `keys` of type K to `values` of type V using a hashing function, which determines how it places these keys and values into memory. 
+Hash maps are `useful` when you want to look up data `not by using an index`, as you can with vectors, but `by using a key` that can be of any type. 
+
+### Creating a New Hash Map
+One way to create an empty hash map is using new and adding elements with insert. Just like vectors, hash maps store their data on the heap. 
+```rust
+    use std::collections::HashMap;
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+```
+> we need to first `use the HashMap from the collections` portion of the standard library.
+
+### Accessing Values in a Hash Map
+We `can get a value` out of the hash map by providing its key to the `get` method
+```rust
+    use std::collections::HashMap;
+
+    let mut scores = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+
+    let team_name = String::from("Blue");
+    let score = scores.get(&team_name).copied().unwrap_or(0);
+```
+> Here, `score` will have the value that’s associated with the `Blue` team, and the result will be `10`. The `get` method returns an `Option<&V>`; if there’s `no value` for that key in the hash map, get will return `None`. This program handles the `Option` by calling `copied` to get an `Option<i32>` rather than an `Option<&i32>`, then `unwrap_or` to set score to zero if scores doesn't have an entry for the key.
+
+We can `iterate` over each key/value pair in a `hash map` in a similar manner as we do with vectors, using a `for loop`
+```rust
+    use std::collections::HashMap;
+
+    let mut scores = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Yellow"), 50);
+
+    for (key, value) in &scores {
+        println!("{key}: {value}");
+    }
+```
+
+### Hash Maps and Ownership
+For types that implement the `Copy trait, like i32`, the values are `copied into the hash` map. `For owned` values like `String`, the values will be `moved` and the hash map will be the `owner` of those values
+```rust
+    use std::collections::HashMap;
+
+    let field_name = String::from("Favorite color");
+    let field_value = String::from("Blue");
+
+    let mut map = HashMap::new();
+    map.insert(field_name, field_value);
+    // field_name and field_value are invalid at this point, try using them and
+    // see what compiler error you get!
+```
+> We `aren’t able to use` the variables `field_name` and `field_value` after they’ve been moved into the hash map with the call to insert.
+
+### Updating a Hash Map
+When you want to change the data in a hash map, you have to decide how to handle the case when a key already has a value assigned.
+
+Overwriting a Value
+```rust
+    use std::collections::HashMap;
+
+    let mut scores = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+    scores.insert(String::from("Blue"), 25);
+
+    println!("{:?}", scores);
+```
+> If we insert a key and a value into a hash map and then insert that same key with a different value, the value associated with that key will be replaced
+
+Adding a Key and Value Only If a Key Isn’t Present
+```rust
+    use std::collections::HashMap;
+
+    let mut scores = HashMap::new();
+    scores.insert(String::from("Blue"), 10);
+
+    scores.entry(String::from("Yellow")).or_insert(50);
+    scores.entry(String::from("Blue")).or_insert(50);
+
+    println!("{:?}", scores);
+```
+> if the key does exist in the hash map, the existing value should remain the way it is. If the key doesn’t exist, insert it and a value for it.
+
+Updating a Value Based on the Old Value
+```rust
+    use std::collections::HashMap;
+
+    let text = "hello world wonderful world";
+
+    let mut map = HashMap::new();
+
+    for word in text.split_whitespace() {
+        let count = map.entry(word).or_insert(0);
+        *count += 1;
+    }
+
+    println!("{:?}", map);
+```
+> We use a hash map with the words as keys and increment the value to keep track of how many times we’ve seen that word
+
+### Hashing Functions
+By default, HashMap uses a hashing function called `SipHash` 
+
+# Error Handling
+Rust groups errors into `two` major categories: `recoverable` and `unrecoverable errors`. For a recoverable error, such as a `file not found` error, we most likely just `want to report` the problem to the user and retry the operation. Unrecoverable errors are always symptoms of `bugs`, like `trying to access a location beyond the end of an array`, and so we want to immediately `stop` the program.
+Rust `doesn’t have exceptions`. Instead, it has the type `Result<T, E>` for `recoverable` errors and the `panic!` macro that stops execution when the program encounters an `unrecoverable error`.
+
+## Unrecoverable Errors with panic!
+By default, when a panic occurs, the program starts unwinding, which means Rust walks back up the stack and cleans up the data from each function it encounters. However, this walking back and cleanup is a lot of work. Rust, therefore, allows you to choose the alternative of immediately aborting, which ends the program without cleaning up.
+```
+//Cargo.toml file
+[profile.release]
+panic = 'abort'
+```
+Sometimes, bad things happen in your code, and there’s nothing you can do about it. In these cases, Rust has the `panic!` macro
+```rust
+fn main() {
+    panic!("crash and burn");
+}
+```
+
+### Using a panic! Backtrace
+We can set the `RUST_BACKTRACE` environment variable to get a backtrace of exactly what happened to cause the error. A backtrace is a list of all the functions that `have been called to get to this point`.
+```sh
+RUST_BACKTRACE=1 cargo run
+```
+> Debug symbols are `enabled by default` when using cargo build or cargo run without the `--release` flag, as we have here.
+
+### Recoverable Errors with Result
+Most errors aren’t serious enough to require the program to stop entirely.
+```rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+```
+
+We need to `add` to the code to take `different actions depending` on the `value` File::open `returns`
+```rust
+use std::fs::File;
+fn main() {
+    let greeting_file_result = File::open("hello.txt");
+    let greeting_file = match greeting_file_result {
+        Ok(file) => file, // return inner file
+        Err(error) => panic!("Problem opening the file: {:?}", error), // panic
+    };
+}
+```
+
+### Matching on Different Errors
+We want to take `different actions` for different failure reasons: `if File::open failed` because the file doesn’t exist, `we want to create` the file and return the handle to the new file
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+
+fn main() {
+    let greeting_file_result = File::open("hello.txt");
+
+    let greeting_file = match greeting_file_result {
+        Ok(file) => file,
+        Err(error) => match error.kind() { // different kinds of errors
+            ErrorKind::NotFound => match File::create("hello.txt") { // if not found try to create file
+                Ok(fc) => fc,
+                Err(e) => panic!("Problem creating the file: {:?}", e), // panic if failed
+            },
+            other_error => {
+                panic!("Problem opening the file: {:?}", other_error); // in other kind panic
+            }
+        },
+    };
+}
+```
+
+The `match` expression is very useful but also very much a `primitive`. Here’s `another way` to write the same logic this time using `closures` and the `unwrap_or_else` method
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+fn main() {
+    let greeting_file = File::open("hello.txt").unwrap_or_else(|error| {
+        if error.kind() == ErrorKind::NotFound {
+            File::create("hello.txt").unwrap_or_else(|error| {
+                panic!("Problem creating the file: {:?}", error);
+            })
+        } else {
+            panic!("Problem opening the file: {:?}", error);
+        }
+    });
+}
+```
+
+### Shortcuts for Panic on Error: unwrap and expect
+If the `Result` value is the `Ok` variant, `unwrap` will `return` the value inside the `Ok`. If the Result is the `Err` variant, unwrap will call the `panic!` macro for us.
+```rust
+use std::fs::File;
+fn main() {
+    let greeting_file = File::open("hello.txt").unwrap();
+}
+```
+
+Similarly, the `expect` method lets us also `choose` the `panic!` error message. Using `expect instead of unwrap` and providing good error messages can convey your intent and `make tracking` down the source of a `panic easier`. 
+```rust
+use std::fs::File;
+fn main() {
+    let greeting_file = File::open("hello.txt")
+        .expect("hello.txt should be included in this project");
+}
+```
+> In production-quality code, most Rustaceans choose `expect rather than unwrap`
+
+### Propagating Errors
+When a function’s implementation calls something `that might fail`, instead of handling the error within the function itself, you can `return the error` to the `calling code` so that it can decide what to do. This is known as `propagating`
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+fn read_username_from_file() -> Result<String, io::Error> {
+    let username_file_result = File::open("hello.txt");
+    let mut username_file = match username_file_result {
+        Ok(file) => file,
+        Err(e) => return Err(e),
+    };
+    let mut username = String::new();
+    match username_file.read_to_string(&mut username) {
+        Ok(_) => Ok(username), // return String if all ok
+        Err(e) => Err(e), // return Error if cant read
+    }
+}
+```
+> It’s up to the calling code to decide what to do with those values. If the calling code gets an Err value, it could call panic! and crash the program, use a default username, or look up the username from somewhere other than a file, for example.
+
+### A Shortcut for Propagating Errors: the ? Operator
+This pattern of `propagating` errors is so `common in Rust` that Rust provides the question mark operator `?` to make this easier.
+```rust
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username_file = File::open("hello.txt")?;
+    let mut username = String::new();
+    username_file.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+> `error type` received is `converted` into the error type defined in the `return type` of the `current function` - function returns `one error type` to represent all the ways a function might fail
+
+The `?` operator eliminates a lot of boilerplate and `makes` this function’s `implementation simpler`.
+```rust
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut username = String::new();
+    File::open("hello.txt")?.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+> If the value is an `Err`, the Err will be `returned` from the `whole function` as if we had used the `return` keyword so the error value gets propagated to the calling code.
+
+`Reading a file` into a string is a fairly `common operation`, so the standard library provides the convenient `fs::read_to_string`
+```rust
+fn read_username_from_file() -> Result<String, io::Error> {
+    fs::read_to_string("hello.txt")
+}
+```
+
+### Where The ? Operator Can Be Used
+The `?` operator can only be `used` in functions whose `return` type is `compatible` with the value the ? is used on.
+The `error message` also mentioned that ? `can be used` with `Option<T>` values as well.
+```rust
+fn last_char_of_first_line(text: &str) -> Option<char> {
+    text.lines().next()?.chars().last()
+}
+```
+> As with using ? on Result, you can only `use ?` on `Option` in a function that `returns an Option`
+
+Luckily, `main can also return a Result<(), E>`
+``` rust
+use std::error::Error;
+use std::fs::File;
+fn main() -> Result<(), Box<dyn Error>> {
+    let greeting_file = File::open("hello.txt")?;
+    Ok(())
+}
+```
+> you can read `Box<dyn Error>` to mean `any kind of error`
+
+When a `main` function `returns` a `Result<(), E>`, the executable will exit with a value of `0` if main returns `Ok(())` and will exit with a `nonzero` value if main returns an `Err` value. 
+
+## To panic! or Not to panic!
+You could call `panic!` for `any error` situation, whether there’s a possible way to recover or not, but then you’re `making` the decision that a `situation` is `unrecoverable` on behalf of the calling code. When you choose to return a `Result` value, you `give` the calling code `options`. 
+
+### Examples, Prototype Code, and Tests
+When you’re writing an `example` to illustrate some concept, also including robust `error-handling code` can make the example `less clear`. 
+Similarly, the `unwrap and expect` methods are very `handy` when `prototyping`, before you’re ready to decide how to handle errors.
+If a method call fails in a `test`, you’d want the `whole test to fail`, even if that method isn’t the functionality under test.
+
+### Cases in Which You Have More Information Than the Compiler
+If you can ensure by manually inspecting the code that you’ll `never have an Err variant`, it’s perfectly acceptable to call unwrap, and even `better to document the reason` you think you’ll never have an Err variant in the `expect` text
+```rust
+    let home: IpAddr = "127.0.0.1"
+        .parse()
+        .expect("Hardcoded IP address should be valid");
+```
+
+### Guidelines for Error Handling
+In cases where continuing could be `insecure or harmful`, the `best choice` might be to `call panic!` and alert the person using your library to the bug in their code so they can fix it during development.
+However, when `failure is expected`, it’s more appropriate to `return a Result` than to make a panic! call.
+When your code performs an operation that `could put a user at risk` if it’s called using `invalid values`, your code should `verify the values are valid first` and `panic` if the values aren’t valid. 
+> you can use `Rust’s type system` (and thus the type checking done by the compiler) to do `many of the checks` for you.
+
+### Creating Custom Types for Validation
+Let’s take the idea of using `Rust’s type system` to ensure we have a `valid value` one step further and look at creating a custom type for validation.
+`One way` to do this would be to parse the guess as an i32 instead of only a u32 to allow potentially negative numbers, and then `add a check everywhere` for the number being in range
+`Instead`, we can `make a new type` and put the validations in a function to create an instance of the type rather than repeating the validations everywhere.
+```rust
+pub struct Guess { //define a struct that has a field named value that holds an i32
+    value: i32,
+}
+impl Guess {
+    pub fn new(value: i32) -> Guess { // creates instances of Guess values
+        if value < 1 || value > 100 { // check if value correct
+            panic!("Guess value must be between 1 and 100, got {}.", value); // panic if not
+        }
+        Guess { value } // return if all ok
+    }
+    pub fn value(&self) -> i32 { // getter, because value is private
+        self.value
+    }
+}
+```
+> A function that has a parameter or returns only numbers between 1 and 100 could then declare in its signature that it takes or returns a `Guess rather than an i32` and wouldn’t need to do any `additional checks` in its body.
+
+## Summary
+Rust’s error handling features are designed to help you write more robust code. The panic! macro signals that your program is in a state it can’t handle and lets you tell the process to stop instead of trying to proceed with invalid or incorrect values. The Result enum uses Rust’s type system to indicate that operations might fail in a way that your code could recover from. You can use Result to tell code that calls your code that it needs to handle potential success or failure as well. Using panic! and Result in the appropriate situations will make your code more reliable in the face of inevitable problems.
+
