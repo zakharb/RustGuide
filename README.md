@@ -8,6 +8,7 @@
 - [7 Packages Crates and Modules](#7-packages-crates-and-modules)  
 - [8 Common Collections](#8-common-collections)  
 - [9 Error Handling](#9-error-handling)  
+- [10 Generic Types Traits Lifetimes](#10-generic-types-traits-lifetimes)  
 
 # 1 Getting Started
 
@@ -2554,3 +2555,259 @@ impl Guess {
 ## Summary
 Rust’s error handling features are designed to help you write more robust code. The panic! macro signals that your program is in a state it can’t handle and lets you tell the process to stop instead of trying to proceed with invalid or incorrect values. The Result enum uses Rust’s type system to indicate that operations might fail in a way that your code could recover from. You can use Result to tell code that calls your code that it needs to handle potential success or failure as well. Using panic! and Result in the appropriate situations will make your code more reliable in the face of inevitable problems.
 
+# Generic Types Traits Lifetimes
+Every programming language has tools for effectively handling the duplication of concepts. In Rust, one such tool is `generics`: abstract stand-ins for concrete types or other properties. 
+
+## Removing Duplication by Extracting a Function
+To eliminate this duplication, we’ll create an `abstraction` by defining a `function` that operates on any list of integers passed in a parameter. 
+```rust
+fn largest(list: &[i32]) -> &i32 {
+    let mut largest = &list[0];
+
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+
+    largest
+}
+
+fn main() {
+    let number_list = vec![34, 50, 25, 100, 65];
+
+    let result = largest(&number_list);
+    println!("The largest number is {}", result);
+    assert_eq!(*result, 100);
+
+    let number_list = vec![102, 34, 6000, 89, 54, 2, 43, 8];
+
+    let result = largest(&number_list);
+    println!("The largest number is {}", result);
+    assert_eq!(*result, 6000);
+}
+```
+
+In summary, here are the steps we took to change the code:
+- Identify duplicate code.  
+- Extract the duplicate code into the body of the function and specify the inputs and return values of that code in the function signature.  
+- Update the two instances of duplicated code to call the function instead.  
+
+## Generic Data Types
+We use `generics` to create definitions for items `like function` signatures or structs, which we can then use with many different concrete data types. 
+
+### In Function Definitions
+When we use a `parameter` in the body of the function, we have to `declare` the parameter name in the `signature` so the compiler knows what that name means.
+```rust
+fn largest<T>(list: &[T]) -> &T {
+```
+
+### In Struct Definitions
+We can also define `structs` to use a generic type parameter in one or more fields using the `<>` syntax.
+```rust
+struct Point<T> {
+    x: T,
+    y: T,
+}
+
+fn main() {
+    let integer = Point { x: 5, y: 10 };
+    let float = Point { x: 1.0, y: 4.0 };
+}
+```
+> Note that because we’ve used only `one generic` type to define `Point<T>`, this definition says that the Point<T> struct is generic over `some type T`, and the fields x and y are `both that same type`, whatever that type may be.
+
+To define a Point struct where x and y are both `generics` but could have `different types`, we can use `multiple generic type` parameters. 
+```rust
+struct Point<T, U> {
+    x: T,
+    y: U,
+}
+
+fn main() {
+    let both_integer = Point { x: 5, y: 10 };
+    let both_float = Point { x: 1.0, y: 4.0 };
+    let integer_and_float = Point { x: 5, y: 4.0 };
+}
+```
+
+### In Enum Definitions
+We can define enums to hold `generic data` types in their variants.
+```rust
+enum Option<T> {
+    Some(T),
+    None,
+}
+```
+
+Enums can use `multiple generic` types as well. 
+```rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+```
+
+### In Method Definitions
+We can implement methods on structs and enums and use `generic types` in their `definitions`, too.
+```rust
+struct Point<T> {
+    x: T,
+    y: T,
+}
+
+impl<T> Point<T> { // using generic data type <T>
+    fn x(&self) -> &T {
+        &self.x
+    }
+}
+
+fn main() {
+    let p = Point { x: 5, y: 10 };
+
+    println!("p.x = {}", p.x());
+}
+```
+
+Generic type parameters in a struct definition `aren’t always the same` as those you use in that `same struct’s method` signatures.
+```rust
+struct Point<X1, Y1> {
+    x: X1,
+    y: Y1,
+}
+
+impl<X1, Y1> Point<X1, Y1> {
+    fn mixup<X2, Y2>(self, other: Point<X2, Y2>) -> Point<X1, Y2> {
+        Point {
+            x: self.x,
+            y: other.y,
+        }
+    }
+}
+
+fn main() {
+    let p1 = Point { x: 5, y: 10.4 };
+    let p2 = Point { x: "Hello", y: 'c' };
+
+    let p3 = p1.mixup(p2);
+
+    println!("p3.x = {}, p3.y = {}", p3.x, p3.y);
+}
+```
+> In main, we’ve defined a Point that has an i32 for x (with value 5) and an f64 for y (with value 10.4). The p2 variable is a Point struct that has a string slice for x (with value "Hello") and a char for y (with value c). Calling mixup on p1 with the argument p2 gives us p3, which will have an i32 for x, because x came from p1. The p3 variable will have a char for y, because y came from p2. The println! macro call will print p3.x = 5, p3.y = c.
+
+### Performance of Code Using Generics
+Rust accomplishes this by performing `monomorphization` of the code using generics at compile time. Monomorphization is the process of `turning generic code` into specific code by `filling` in the `concrete types` that are used when compiled. 
+
+## Traits: Defining Shared Behavior
+A `trait defines functionality` a particular type has and can share `with other types`.
+
+### Defining a Trait 
+A type’s behavior consists of the `methods` we can call on that `type`. `Different types` share the `same behavior` if we can call the `same methods` on all of those types. `Trait` definitions are a way to `group method` signatures together to define a set of behaviors necessary `to accomplish some purpose`.
+
+We want to make a media `aggregator library crate` named aggregator that can `display summaries` of data that might be stored in a NewsArticle or Tweet instance. To do this, we need a `summary from each type`, and we’ll request that summary by calling a `summarize method` on an instance. 
+```rust
+pub trait Summary {
+    fn summarize(&self) -> String;
+}
+```
+
+### Implementing a Trait on a Type
+Now that we’ve defined the desired signatures of the `Summary trait’s methods`, we can implement it on the types in our media aggregator.
+```rust
+pub trait Summary {
+    fn summarize(&self) -> String;
+}
+
+pub struct NewsArticle {
+    pub headline: String,
+    pub location: String,
+    pub author: String,
+    pub content: String,
+}
+
+impl Summary for NewsArticle { // trait Summary for NewsArticle
+    fn summarize(&self) -> String {
+        format!("{}, by {} ({})", self.headline, self.author, self.location)
+    }
+}
+
+pub struct Tweet {
+    pub username: String,
+    pub content: String,
+    pub reply: bool,
+    pub retweet: bool,
+}
+
+impl Summary for Tweet { // trait Summary for Tweet
+    fn summarize(&self) -> String {
+        format!("{}: {}", self.username, self.content)
+    }
+}
+```
+> Implementing a trait on a type is similar to implementing regular methods. The difference is that after impl, we put the trait name we want to implement, then use the for keyword, and then specify the name of the type we want to implement the trait for.
+
+Now `call the trait` methods on instances of NewsArticle and Tweet in the same way we call `regular methods`.
+```rust
+use aggregator::{Summary, Tweet};
+
+fn main() {
+    let tweet = Tweet {
+        username: String::from("horse_ebooks"),
+        content: String::from(
+            "of course, as you probably already know, people",
+        ),
+        reply: false,
+        retweet: false,
+    };
+
+    println!("1 new tweet: {}", tweet.summarize());
+}
+```
+> But we `can’t implement external traits on external types`. For example, we can’t implement the Display trait on Vec<T> within our aggregator crate, because Display and Vec<T> are both defined in the standard library and aren’t local to our aggregator crate. This restriction is part of a property called `coherence`, and more specifically the `orphan rule`, so named because the parent type is not present. This rule ensures that `other people’s code can’t break your code` and vice versa. Without the rule, two crates could implement the same trait for the same type, and Rust wouldn’t know which implementation to use.
+
+### Default Implementations
+Sometimes it’s useful to have `default behavior for some or all of the methods` in a trait instead of requiring implementations for all methods on every type. 
+```rust
+pub trait Summary {
+    fn summarize(&self) -> String {
+        String::from("(Read more...)")
+    }
+}
+impl Summary for NewsArticle {}
+```
+
+Default implementations can call other methods in the same trait, even if those other methods don’t have a default implementation.
+```rust
+pub trait Summary { // trait with 2 methods
+    fn summarize_author(&self) -> String;
+
+    fn summarize(&self) -> String {
+        format!("(Read more from {}...)", self.summarize_author())
+    }
+}
+impl Summary for Tweet { // define only summarize_author()
+    fn summarize_author(&self) -> String {
+        format!("@{}", self.username)
+    }
+}
+// can use in main default trait summarize()
+println!("1 new tweet: {}", tweet.summarize());
+```
+
+### Traits as Parameters
+Now that you know `how to define and implement traits`, we can explore how to use traits to `define functions` that accept `many different types`. To do this, we use the impl Trait syntax.
+```rust
+pub fn notify(item: &impl Summary) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
+> Instead of a concrete type for the item parameter, we specify the impl keyword and the trait name.
+
+### Trait Bound Syntax
+The `impl Trait syntax` works for straightforward cases but is actually `syntax sugar` for a longer form known as a trait bound;
+```rust
+pub fn notify<T: Summary>(item: &T) {
+    println!("Breaking news! {}", item.summarize());
+}
+```
