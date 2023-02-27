@@ -9,6 +9,7 @@
 - [8 Common Collections](#8-common-collections)  
 - [9 Error Handling](#9-error-handling)  
 - [10 Generic Types Traits Lifetimes](#10-generic-types-traits-lifetimes)  
+- [11 How to Write Tests](#11-how-to-write-tests)  
 
 # 1 Getting Started
 
@@ -2805,9 +2806,482 @@ pub fn notify(item: &impl Summary) {
 > Instead of a concrete type for the item parameter, we specify the impl keyword and the trait name.
 
 ### Trait Bound Syntax
-The `impl Trait syntax` works for straightforward cases but is actually `syntax sugar` for a longer form known as a trait bound;
+The `impl Trait syntax` works for straightforward cases but is actually `syntax sugar` for a longer form known as a `trait bound`;
 ```rust
 pub fn notify<T: Summary>(item: &T) {
     println!("Breaking news! {}", item.summarize());
 }
 ```
+> Using `impl Trait` is appropriate `if we want` this function to allow item1 and item2 to have `different types`
+
+### Specifying Multiple Trait Bounds with the + Syntax
+Say we wanted notify to use display formatting as well as summarize on item: we specify in the notify definition that item must implement `both Display and Summary`
+```rust
+pub fn notify(item: &(impl Summary + Display)) {
+// or generic
+pub fn notify<T: Summary + Display>(item: &T) {
+```
+
+### Clearer Trait Bounds with where Clauses
+Each generic has its own trait bounds, so functions with multiple generic type parameters can contain `lots of trait bound` information between the function’s name and its parameter list. specifying trait bounds inside a `where clause`
+```rust
+fn some_function<T: Display + Clone, U: Clone + Debug>(t: &T, u: &U) -> i32 {
+// with where
+fn some_function<T, U>(t: &T, u: &U) -> i32
+where
+    T: Display + Clone,
+    U: Clone + Debug,
+{
+```
+
+### Returning Types that Implement Traits
+We can also `use the impl Trait syntax in the return position` to return a value of some type that implements a `trait`
+```rust
+fn returns_summarizable() -> impl Summary {
+    Tweet {
+        username: String::from("horse_ebooks"),
+        content: String::from(
+            "of course, as you probably already know, people",
+        ),
+        reply: false,
+        retweet: false,
+    }
+}
+```
+> By using impl Summary for the return type, we specify that the `returns_summarizable` function returns some type that implements the `Summary trait` without naming the concrete type. you can only use impl Trait if you’re returning a `single type`.
+
+### Using Trait Bounds to Conditionally Implement Methods
+By using a trait bound with an impl block that uses generic type parameters, we can implement methods conditionally for types that implement the specified traits.
+```rust
+use std::fmt::Display;
+
+struct Pair<T> {
+    x: T,
+    y: T,
+}
+
+impl<T> Pair<T> { // always implements the new function to return a new instance of Pair<T>
+    fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+}
+
+impl<T: Display + PartialOrd> Pair<T> { // implements the cmp_display method only if its inner type T implements the PartialOrd and Display
+    fn cmp_display(&self) {
+        if self.x >= self.y {
+            println!("The largest member is x = {}", self.x);
+        } else {
+            println!("The largest member is y = {}", self.y);
+        }
+    }
+}
+```
+> Implementations of a trait on any type that `satisfies the trait bounds` are called `blanket implementations` and are extensively used in the Rust standard library. 
+
+For example, the standard library implements the ToString trait on any type that implements the Display trait. 
+```rust
+impl<T: Display> ToString for T {
+    // --snip--
+}
+```
+
+## Validating References with Lifetimes
+Rather than ensuring that a type has the behavior we want, `lifetimes ensure` that references are `valid as long as we need` them to be.
+
+### Preventing Dangling References with Lifetimes
+The main aim of lifetimes is to prevent `dangling references`, which cause a program to `reference data other` than the `data it’s intended to reference`.
+```rust
+fn main() {
+    let r;
+    {
+        let x = 5;
+        r = &x; // asign r to &x
+    }
+    println!("r: {}", r); // x is no longer valid - out of scope
+}
+```
+
+### The Borrow Checker
+The Rust compiler has a `borrow checker` that `compares` scopes to determine whether `all borrows are valid`.
+```rust
+fn main() {
+    let r;                // ---------+-- 'a
+                          //          |
+    {                     //          |
+        let x = 5;        // -+-- 'b  |
+        r = &x;           //  |       |
+    }                     // -+       |
+                          //          |
+    println!("r: {}", r); //          |
+}                         // ---------+
+``` 
+> Here, we’ve annotated the lifetime of `r` with `'a` and the lifetime of `x` with `'b`. As you can see, the inner `'b` block is much smaller than the outer `'a` lifetime block
+
+Fixes the code so it `doesn’t have a dangling reference`
+```rust
+fn main() {
+    let x = 5;            // ----------+-- 'b
+                          //           |
+    let r = &x;           // --+-- 'a  |
+                          //   |       |
+    println!("r: {}", r); //   |       |
+                          // --+       |
+}                         // ----------+
+```
+> Here, `x` has the lifetime `'b`, which in this case is larger than `'a`
+
+### Generic Lifetimes in Functions
+We’ll write a function that returns the longer of two string slices. 
+```rust
+fn main() {
+    let string1 = String::from("abcd");
+    let string2 = "xyz";
+
+    let result = longest(string1.as_str(), string2);
+    println!("The longest string is {}", result);
+}
+```
+> Note that we want the function to take string slices, which are references, rather than strings, because we don’t want the longest function to take ownership of its parameters.
+
+If we try to implement the longest function, it won’t compile.
+```rust
+fn longest(x: &str, y: &str) -> &str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+```
+> To `fix` this error, we’ll `add generic lifetime parameters` that define the relationship between the references so the borrow checker can perform its analysis.
+
+### Lifetime Annotation Syntax
+Lifetime annotations `don’t change how long any of the references live`. Rather, they `describe the relationships of the lifetimes` of multiple references to each other without affecting the lifetimes.
+```rust
+&i32        // a reference
+&'a i32     // a reference with an explicit lifetime
+&'a mut i32 // a mutable reference with an explicit lifetime
+```
+
+### Lifetime Annotations in Function Signatures
+Declare the `generic lifetime parameters` inside `angle brackets` between the function name and the parameter list, just as we did with `generic type parameters`.
+```rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+```
+
+### Lifetime Annotations in Struct Definitions
+So far, the structs we’ve defined `all hold owned types`. We can define `structs to hold references`, but in that case we would `need to add a lifetime annotation` on every reference in the struct’s definition. 
+```rust
+struct ImportantExcerpt<'a> {
+    part: &'a str,
+}
+```
+
+### Lifetime Elision
+Lifetimes on function or method parameters are called `input lifetimes`, and lifetimes on return values are called `output lifetimes`.
+The `first rule` is that the compiler assigns a `lifetime parameter to each parameter` that’s a reference. `fn foo<'a>(x: &'a i32);`
+The `second rule` is that, if there is `exactly one input` lifetime parameter, that lifetime is assigned to `all output lifetime` parameters: `fn foo<'a>(x: &'a i32) -> &'a i32`
+The `third rule` is that, if there are multiple input lifetime parameters, but one of them is `&self or &mut self` because this is a method, the lifetime of self is assigned to `all output lifetime` parameters. 
+
+### Lifetime Annotations in Method Definitions
+When we `implement methods` on a struct with lifetimes, we `use` the `same syntax as that of generic type parameters` shown
+```rust
+//no lifetime
+impl<'a> ImportantExcerpt<'a> {
+    fn level(&self) -> i32 {
+        3
+    }
+}
+
+//third lifetime elision rule
+impl<'a> ImportantExcerpt<'a> {
+    fn announce_and_return_part(&self, announcement: &str) -> &str {
+        println!("Attention please: {}", announcement);
+        self.part
+    }
+}
+```
+
+### The Static Lifetime
+`'static`, which denotes that the affected `reference` can `live` for the `entire duration of the program`. All `string` literals have the `'static` lifetime, which we can annotate as follows:
+```rust
+let s: &'static str = "I have a static lifetime.";
+```
+
+### Generic Type Parameters, Trait Bounds, and Lifetimes Together
+Let’s briefly look at the syntax of specifying generic type parameters, trait bounds, and lifetimes `all in one` function!
+```rust
+use std::fmt::Display;
+
+fn longest_with_an_announcement<'a, T>(
+    x: &'a str,
+    y: &'a str,
+    ann: T,
+) -> &'a str
+where
+    T: Display,
+{
+    println!("Announcement! {}", ann);
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+```
+>This is the longest function from Listing 10-21 that returns the longer of two string slices. But now it has an extra parameter named ann of the generic type T, which can be filled in by any type that implements the Display trait as specified by the where clause. This extra parameter will be printed using {}, which is why the Display trait bound is necessary. Because lifetimes are a type of generic, the declarations of the lifetime parameter 'a and the generic type parameter T go in the same list inside the angle brackets after the function name.
+
+# 11 How to Write Tests
+In his 1972 essay “The Humble Programmer,” Edsger W. Dijkstra said that “Program testing can be a very effective way to show the presence of bugs, but it is hopelessly inadequate for showing their absence.”
+
+## How to Write Tests
+3 actions
+- Set up any needed data or state.  
+- Run the code you want to test.  
+- Assert the results are what you expect.  
+
+### The Anatomy of a Test Function
+Example; `cargo test` to run test
+```rust
+#[cfg(test)]
+mod tests {
+    #[test] // this attribute indicates this is a test function
+    fn it_works() {
+        let result = 2 + 2;
+        assert_eq!(result, 4); //macro to assert that result, which contains the result of adding 2 and 2, equals 4
+    }
+}
+```
+
+### Checking Results with the assert! Macro
+The `assert!` macro, provided by the standard library, is useful when you want to ensure that some condition in a test `evaluates to true`
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // anything we define in the outer module is available to this tests module.
+
+    #[test]
+    fn larger_can_hold_smaller() {
+        let larger = Rectangle {
+            width: 8,
+            height: 7,
+        };
+        let smaller = Rectangle {
+            width: 5,
+            height: 1,
+        };
+
+        assert!(larger.can_hold(&smaller));
+    }
+
+    #[test]
+    fn smaller_cannot_hold_larger() {
+        let larger = Rectangle {
+            width: 8,
+            height: 7,
+        };
+        let smaller = Rectangle {
+            width: 5,
+            height: 1,
+        };
+
+        assert!(!smaller.can_hold(&larger));
+    }    
+}
+```
+
+### Testing Equality with the assert_eq! and assert_ne! Macros
+These macros compare two arguments for `equality or inequality`, respectively. They’ll `also print the two values` if the `assertion fails`, which makes it easier to see why the test failed; 
+```rust
+pub fn add_two(a: i32) -> i32 {
+    a + 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_adds_two() {
+        assert_eq!(4, add_two(2));
+    }
+}
+```
+
+### Adding Custom Failure Messages
+Any arguments specified `after the required arguments` are passed along to the `format!` macro
+```rust
+    #[test]
+    fn greeting_contains_name() {
+        let result = greeting("Carol");
+        assert!(
+            result.contains("Carol"),
+            "Greeting did not contain name, value was `{}`",
+            result
+        );
+    }
+```
+
+### Checking for Panics with should_panic
+In addition to checking return values, it’s important to check that our code handles error conditions as we expect. 
+```rust
+pub struct Guess {
+    value: i32,
+}
+
+impl Guess {
+    pub fn new(value: i32) -> Guess {
+        if value < 1 || value > 100 {
+            panic!("Guess value must be between 1 and 100, got {}.", value);
+        }
+
+        Guess { value }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    // The test passes if the code inside the function panics
+    #[should_panic(expected = "less than or equal to 100")]
+    fn greater_than_100() {
+        Guess::new(200);
+    }
+}
+```
+
+### Using Result<T, E> in Tests
+Use `Result<T, E>` and return an `Err` instead of `panicking`
+```rust
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() -> Result<(), String> {
+        if 2 + 2 == 4 {
+            Ok(())
+        } else {
+            Err(String::from("two plus two does not equal four"))
+        }
+    }
+}
+```
+
+## Controlling How Tests Are Run
+`Some` command line `options go` to `cargo test`, and some go `to the resulting test binary`. `To separate` these two types of arguments, you list the arguments that go to `cargo test` followed by the separator `--` and then the ones that go to the test binary. 
+
+### Running Tests in Parallel or Consecutively
+When you run multiple tests, `by default` they run `in parallel` using threads, meaning they finish running faster and you get feedback quicker. 
+```sh
+cargo test -- --test-threads=1
+```
+
+### Showing Function Output
+`By default`, if a test passes, Rust’s test library `captures anything` printed to standard output. To show `println!` use
+```sh
+cargo test -- --show-output
+```
+
+### Running a Subset of Tests by Name
+Running Single Tests
+```sh
+cargo test one_hundred
+```
+
+Filtering to Run Multiple Tests. Two of our tests’ names `contain add`, we can run those two by running:
+```sh
+cargo test add
+```
+
+Ignoring Some Tests Unless Specifically Requested
+```rust
+#[test]
+#[ignore]
+fn expensive_test() {
+    // code that takes an hour to run
+}
+```
+
+## Test Organization
+The Rust community thinks about tests in terms of `two main categories`: `unit tests` and `integration tests`. `Unit tests` are `small` and more focused, `testing one module` in isolation at a time, and can test `private interfaces`. `Integration tests` are entirely `external` to your library and use your code in the same way any other external code would, using only `the public interface` and potentially exercising `multiple modules per test`.
+
+### Unit Tests
+You’ll put unit tests in the src directory in each file with the code that they’re testing. The convention is to create a module named tests in each file to contain the test functions and to annotate the module with cfg(test).
+
+The Tests Module and #[cfg(test)]
+```rust
+#[cfg(test)]
+mod tests { // create module tests
+    #[test]
+    fn it_works() {
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+    }
+}
+```
+
+Testing Private Functions
+```rust
+pub fn add_two(a: i32) -> i32 {
+    internal_adder(a, 2)
+}
+
+fn internal_adder(a: i32, b: i32) -> i32 { // without pub
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // bring all fn to scope 
+
+    #[test]
+    fn internal() {
+        assert_eq!(4, internal_adder(2, 2));
+    }
+}
+```
+>There’s debate within the testing community about whether or not private functions should be tested directly
+
+### Integration Tests
+In Rust, integration tests are entirely external to your library.They use your library in the same way any other code would, which means they can only call functions that are part of your library’s public API.
+
+The tests Directory
+```sh
+adder
+├── Cargo.lock
+├── Cargo.toml
+├── src
+│   └── lib.rs
+└── tests
+    └── integration_test.rs
+```
+```rust
+use adder; // bring lib to tests
+#[test]
+fn it_adds_two() {
+    assert_eq!(4, adder::add_two(2));
+}
+```
+> We don’t need to annotate any code in `tests/integration_test.rs` with `#[cfg(test)]`
+
+Integration Tests for Binary Crates
+>If our project is a binary crate that only contains a src/main.rs file and doesn’t have a src/lib.rs file, we `can’t create integration tests` in the tests directory and bring functions defined in the src/main.rs file into scope with a use statement. `Only library crates expose functions` that other crates can use; binary crates are meant to be run on their own.
