@@ -13,16 +13,22 @@ impl Config {
     // implementation for Struct using build constructor  
     // error handling         
     // read config from arguments and Env         
-    pub fn build(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {              // error handling
-            return Err("not enough arguments");
-        }
-        let query = args[1].clone();     // need new refs
-        let file_path = args[2].clone(); // clone not eff but easy
-        let mut ignore_case = env::var("IGNORE_CASE").is_ok();
-        if args.len() > 3 {
-            ignore_case = true;
-        }
+    pub fn build(
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        args.next();
+
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a query string"),
+        };
+
+        let file_path = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a file path"),
+        };
+
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
 
         Ok(Config { 
             query,
