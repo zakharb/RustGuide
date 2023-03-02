@@ -11,6 +11,7 @@
 - [10 Generic Types Traits Lifetimes](#10-generic-types-traits-lifetimes)  
 - [11 How to Write Tests](#11-how-to-write-tests)  
 - [12 Building a Command Line Program](#12-building-a-command-line-program)  
+- [13 Functional Language Features](#13-functional-fanguage-features)  
 
 # 1 Getting Started
 
@@ -3818,4 +3819,423 @@ fn main() {
 }
 ```
 > now using standard output for successful output and standard error for error output as appropriate.
+
+# Functional Language Features
+Programming in a functional style often includes using functions as values by passing them in arguments, returning them from other functions, assigning them to variables for later execution, and so forth.
+
+## Closures: Anonymous Functions that Capture Their Environment
+Rust’s closures are anonymous functions you can save in a variable or pass as arguments to other functions.
+
+### Capturing the Environment with Closures
+For this example, we’re going to use an enum called ShirtColor that has the variants `Red` and `Blue` (limiting the number of colors available for simplicity). We represent the company’s `inventory` with an Inventory struct that has a field named `shirts` that contains a `Vec<ShirtColor>` representing the shirt colors currently in stock. The method `giveaway` defined on `Inventory` gets the optional shirt color preference of the free shirt winner, and returns the shirt color the person will get.
+```rust
+#[derive(Debug, PartialEq, Copy, Clone)]
+enum ShirtColor {
+    Red,
+    Blue,
+}
+
+struct Inventory {
+    shirts: Vec<ShirtColor>,
+}
+
+impl Inventory {
+    fn giveaway(&self, user_preference: Option<ShirtColor>) -> ShirtColor {
+        // passed a closure that calls self.most_stocked()
+        // on the current Inventory instance
+        // The standard library didn’t need to know anything
+        // about the Inventory or ShirtColor types we defined,
+        // Functions, on the other hand, 
+        // are not able to capture their environment in this way.
+        user_preference.unwrap_or_else(|| self.most_stocked())
+    }
+
+    fn most_stocked(&self) -> ShirtColor {
+        let mut num_red = 0;
+        let mut num_blue = 0;
+
+        for color in &self.shirts {
+            match color {
+                ShirtColor::Red => num_red += 1,
+                ShirtColor::Blue => num_blue += 1,
+            }
+        }
+        if num_red > num_blue {
+            ShirtColor::Red
+        } else {
+            ShirtColor::Blue
+        }
+    }
+}
+```
+
+### Closure Type Inference and Annotation
+Closures don’t usually require you to annotate the types of the parameters or the return value like `fn` functions do.
+Closures are typically short and relevant only within a narrow context rather than in any arbitrary scenario. 
+As with variables, we can add type annotations if we want to increase explicitness and clarity at the cost of being more verbose than is strictly necessary.
+```rust
+    let expensive_closure = |num: u32| -> u32 {
+        println!("calculating slowly...");
+        thread::sleep(Duration::from_secs(2));
+        num
+    };
+```
+This illustrates how closure syntax is similar to function syntax except for the use of pipes and the amount of syntax that is optional:
+```rust
+fn  add_one_v1   (x: u32) -> u32 { x + 1 }
+let add_one_v2 = |x: u32| -> u32 { x + 1 };
+let add_one_v3 = |x|             { x + 1 };
+let add_one_v4 = |x|               x + 1  ;
+```
+Because there are no type annotations, we can call the closure with any type, which we’ve done here with `String` the first time. If we then try to call example_closure with an `integer`, we’ll get an error.
+```rust
+    let example_closure = |x| x;
+
+    let s = example_closure(String::from("hello"));
+    let n = example_closure(5); // error here, cant use second time
+```
+
+### Capturing References or Moving Ownership
+Closures can capture values from their environment in three ways, which directly map to the three ways a function can take a parameter: 
+- borrowing immutably  
+- borrowing mutably  
+- taking ownership  
+
+A closure that captures an immutable reference to the vector named `list` because it only needs an immutable reference to print the value:
+```rust
+fn main() {
+    let list = vec![1, 2, 3];
+    println!("Before defining closure: {:?}", list);
+
+    let only_borrows = || println!("From closure: {:?}", list); // bind closure
+
+    println!("Before calling closure: {:?}", list);
+    only_borrows(); // using closure
+    println!("After calling closure: {:?}", list);
+}
+```
+> Because we can have multiple immutable references to list at the same time, list is still accessible from the code before the closure definition, after the closure definition but before the closure is called, and after the closure is called. 
+
+we change the closure body so that it adds an element to the list vector. The closure now captures a mutable reference
+```rust
+fn main() {
+    let mut list = vec![1, 2, 3];
+    println!("Before defining closure: {:?}", list);
+
+    let mut borrows_mutably = || list.push(7); // borrow bind with mut
+    // no printing here because borrowing
+    borrows_mutably();
+    println!("After calling closure: {:?}", list);
+}
+```
+> Note that there’s no longer a `println!` between the definition and the call of the `borrows_mutably` closure: when `borrows_mutably` is defined, it captures a mutable reference to `list`
+
+If you want to force the closure to take ownership of the values it uses in the environment even though the body of the closure doesn’t strictly need ownership, you can use the `move` keyword before the parameter list.
+```rust
+use std::thread;
+
+fn main() {
+    let list = vec![1, 2, 3];
+    println!("Before defining closure: {:?}", list);
+
+    thread::spawn(move || println!("From thread: {:?}", list))
+        .join()
+        .unwrap();
+}
+```
+> This technique is mostly useful when passing a closure to a new `thread` to move the data so that it’s owned by the new thread.
+> If the main thread maintained ownership of list but ended before the new thread did and dropped list, the immutable reference in the thread would be invalid. 
+
+### Moving Captured Values Out of Closures and the Fn Traits
+A closure body can do any of the following: move a captured value out of the closure, mutate the captured value, neither move nor mutate the value, or capture nothing from the environment to begin with.
+The way a closure captures and handles values from the environment affects which traits the closure implements:
+1. `FnOnce` applies to closures that can be called once
+2. `FnMut` applies to closures that don’t move captured values out of their body, but that might mutate the captured values. 
+3. `Fn` applies to closures that don’t move captured values out of their body and that don’t mutate captured values, as well as closures that capture nothing from their environment.
+
+Let’s look at the definition of the unwrap_or_else method on Option<T>
+```rust
+impl<T> Option<T> {
+    pub fn unwrap_or_else<F>(self, f: F) -> T
+    where
+        F: FnOnce() -> T
+    {
+        match self {
+            Some(x) => x,
+            None => f(),
+        }
+    }
+}
+```
+> The trait bound specified on the generic type `F` is `FnOnce() -> T`, which means `F` must be able to be called once, take no arguments, and return a `T`. Because all closures implement `FnOnce`, `unwrap_or_else` accepts the most different kinds of closures and is as flexible as it can be.
+
+Note: Functions can implement all three of the `Fn` traits too. If what we want to do doesn’t require capturing a value from the environment, we can use the name of a function rather than a closure where we need something that implements one of the `Fn` traits. For example, on an `Option<Vec<T>>` value, we could call `unwrap_or_else(Vec::new)` to get a new, empty vector if the value is `None`.
+
+Now let’s look at the standard library method `sort_by_key` defined on slices, to see how that differs from `unwrap_or_else` and why `sort_by_key` uses `FnMut` instead of `FnOnce` for the trait bound. 
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn main() {
+    let mut list = [
+        Rectangle { width: 10, height: 1 },
+        Rectangle { width: 3, height: 5 },
+        Rectangle { width: 7, height: 12 },
+    ];
+
+    list.sort_by_key(|r| r.width);
+    println!("{:#?}", list);
+}
+```
+
+## Processing a Series of Items with Iterators
+The iterator pattern allows you to perform some task on a sequence of items in turn. In Rust, iterators are `lazy`, meaning they have no effect until you call methods that consume the iterator to use it up.
+```rust
+    let v1 = vec![1, 2, 3];
+    let v1_iter = v1.iter();
+```
+When the for loop is called using the iterator in v1_iter, each element in the iterator is used in one iteration of the loop, which prints out each value.
+```rust
+    let v1 = vec![1, 2, 3];
+
+    let v1_iter = v1.iter();
+
+    for val in v1_iter {
+        println!("Got: {}", val);
+    }
+```
+
+### The Iterator Trait and the next Method
+All iterators implement a trait named Iterator that is defined in the standard library. 
+```rust
+pub trait Iterator {
+    type Item;
+
+    fn next(&mut self) -> Option<Self::Item>;
+
+    // methods with default implementations elided
+}
+```
+> type Item: this code says implementing the Iterator trait requires that you also define an Item type, and this Item type is used in the return type of the next method. In other words, the Item type will be the type returned from the iterator.
+
+We can call the next method on iterators directly
+```rust
+    #[test]
+    fn iterator_demonstration() {
+        let v1 = vec![1, 2, 3];
+
+        let mut v1_iter = v1.iter();
+
+        assert_eq!(v1_iter.next(), Some(&1));
+        assert_eq!(v1_iter.next(), Some(&2));
+        assert_eq!(v1_iter.next(), Some(&3));
+        assert_eq!(v1_iter.next(), None);
+    }
+```
+> Note that we needed to make `v1_iter` mutable: calling the `next` method on an iterator changes internal state that the iterator uses to keep track of where it is in the sequence. In other words, this code consumes, or uses up, the iterator. Each call to `next` eats up an item from the iterator. We didn’t need to make `v1_iter` mutable when we used a `for` loop because the loop took ownership of `v1_iter` and made it mutable behind the scenes.
+
+Also note that the values we get from the calls to `next` are immutable references to the values in the vector. The `iter` method produces an iterator over immutable references. If we want to create an iterator that takes ownership of `v1` and returns owned values, we can call `into_iter` instead of iter. Similarly, if we want to iterate over mutable references, we can call `iter_mut` instead of `iter`.
+
+### Methods that Consume the Iterator
+Methods that call `next` are called `consuming adaptors`, because calling them uses up the iterator. One example is the `sum` method
+```rust
+    #[test]
+    fn iterator_sum() {
+        let v1 = vec![1, 2, 3];
+
+        let v1_iter = v1.iter();
+
+        let total: i32 = v1_iter.sum();
+
+        assert_eq!(total, 6);
+    }
+```
+
+### Methods that Produce Other Iterators
+`Iterator adaptors` are methods defined on the `Iterator` trait that don’t consume the iterator. The `map` method returns a new iterator that produces the modified items. 
+```rust
+    let v1: Vec<i32> = vec![1, 2, 3];
+    // map will produce new iterator
+    // we need to collect items from it
+    let v2: Vec<_> = v1.iter().map(|x| x + 1).collect();
+
+    assert_eq!(v2, vec![2, 3, 4]);
+```
+
+### Using Closures that Capture Their Environment
+Many iterator adapters take closures as arguments, and commonly the closures we’ll specify as arguments to iterator adapters will be closures that capture their environment.
+```rust
+#[derive(PartialEq, Debug)]
+struct Shoe {
+    size: u32,
+    style: String,
+}
+
+fn shoes_in_size(shoes: Vec<Shoe>, shoe_size: u32) -> Vec<Shoe> {
+    // takes ownership of a vector of shoes and a shoe size as parameters
+    shoes.into_iter().filter(|s| s.size == shoe_size).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filters_by_size() {
+        let shoes = vec![
+            Shoe {
+                size: 10,
+                style: String::from("sneaker"),
+            },
+            Shoe {
+                size: 13,
+                style: String::from("sandal"),
+            },
+            Shoe {
+                size: 10,
+                style: String::from("boot"),
+            },
+        ];
+
+        let in_my_size = shoes_in_size(shoes, 10);
+
+        assert_eq!(
+            in_my_size,
+            vec![
+                Shoe {
+                    size: 10,
+                    style: String::from("sneaker")
+                },
+                Shoe {
+                    size: 10,
+                    style: String::from("boot")
+                },
+            ]
+        );
+    }
+}
+```
+> The closure captures the shoe_size parameter from the environment and compares the value with each shoe’s size, keeping only shoes of the size specified. Finally, calling collect gathers the values returned by the adapted iterator into a vector that’s returned by the function.
+
+
+## Improving Our I/O Project
+Let’s look at how iterators can improve our implementation of the `Config::build` function and the `search` function.
+
+### Removing a clone Using an Iterator
+With our new knowledge about iterators, we can change the `build` function to take ownership of an iterator as its argument instead of borrowing a slice. 
+```rust
+impl Config {
+    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough arguments");
+        }
+
+        let query = args[1].clone();
+        let file_path = args[2].clone();
+
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
+
+        Ok(Config {
+            query,
+            file_path,
+            ignore_case,
+        })
+    }
+}
+```
+> Once `Config::build` takes ownership of the iterator and stops using indexing operations that borrow, we can move the `String` values from the iterator into `Config` rather than calling `clone` and making a new allocation.
+
+### Using the Returned Iterator Directly
+Change main function
+```rust
+fn main() {
+    let config = Config::build(env::args()).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    // --snip--
+}
+```
+> The `env::args` function returns an iterator! Rather than collecting the iterator values into a vector and then passing a slice to `Config::build`, now we’re passing ownership of the iterator returned from `env::args` to `Config::build` directly.
+
+Change lib
+```rust
+impl Config {
+    pub fn build(
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        // --snip--
+```
+> The standard library documentation for the `env::args` function shows that the type of the iterator it returns is `std::env::Args`, and that type implements the `Iterator` trait and returns `String` values.
+
+### Using Iterator Trait Methods Instead of Indexing
+Next, we’ll fix the body of Config::build. Because args implements the Iterator trait, we know we can call the next method on it! 
+```rust
+impl Config {
+    pub fn build(
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        args.next();
+
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a query string"),
+        };
+
+        let file_path = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a file path"),
+        };
+
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
+
+        Ok(Config {
+            query,
+            file_path,
+            ignore_case,
+        })
+    }
+}
+```
+
+### Making Code Clearer with Iterator Adaptors
+We can also take advantage of iterators in the `search` function in our I/O project
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut results = Vec::new();
+
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+
+    results
+}
+```
+We can write this code in a more concise way using iterator adaptor methods. Doing so also lets us avoid having a mutable intermediate `results` vector. The functional programming style prefers to minimize the amount of mutable state to make code clearer. 
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
+}
+```
+> uses the filter `adaptor` to keep only the lines that `line.contains(query)` returns `true` for. We then collect the matching lines into another vector with `collect`.
+
+### Choosing Between Loops or Iterators
+Most Rust programmers prefer to use the `iterator style`. It’s a bit tougher to get the hang of at first, but once you get a feel for the various iterator adaptors and what they do, iterators can be easier to understand.
+
+## Comparing Performance: Loops vs. Iterators
+To determine whether to use loops or iterators, you need to know which implementation is faster: the version of the search function with an explicit for loop or the version with iterators.
+```rust
+test bench_search_for  ... bench:  19,620,300 ns/iter (+/- 915,700)
+test bench_search_iter ... bench:  19,234,900 ns/iter (+/- 657,200)
+```
+> The iterator version was slightly faster!
 
