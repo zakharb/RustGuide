@@ -19,8 +19,10 @@ impl Config {
         }
         let query = args[1].clone();     // need new refs
         let file_path = args[2].clone(); // clone not eff but easy
-    
-        let ignore_case = env::var("IGNORE_CASE").is_ok();
+        let mut ignore_case = env::var("IGNORE_CASE").is_ok();
+        if args.len() > 3 {
+            ignore_case = true;
+        }
 
         Ok(Config { 
             query,
@@ -54,7 +56,6 @@ pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
     let mut results = Vec::new(); // using vector for matching lines
     for line in contents.lines() {
         if line.contains(query) {
-            println!("{line}");
             results.push(line);
         }
     }
