@@ -12,6 +12,7 @@
 - [11 How to Write Tests](#11-how-to-write-tests)  
 - [12 Building a Command Line Program](#12-building-a-command-line-program)  
 - [13 Functional Language Features](#13-functional-fanguage-features)  
+- [14 More About Cargo](#14-more-about-cargo)  
 
 # 1 Getting Started
 
@@ -4239,3 +4240,239 @@ test bench_search_iter ... bench:  19,234,900 ns/iter (+/- 657,200)
 ```
 > The iterator version was slightly faster!
 
+# More About Cargo
+
+## Customizing Builds with Release Profiles
+In Rust, release profiles are predefined and customizable profiles with different configurations that allow a programmer to have more control over various options for compiling code
+```sh
+$ cargo build
+    Finished dev [unoptimized + debuginfo] target(s) in 0.0s
+$ cargo build --release
+    Finished release [optimized] target(s) in 0.0s
+```
+Cargo has default settings for each of the profiles that apply when you haven't explicitly added any `[profile.*]` sections in the project’s `Cargo.toml file`. 
+```
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+```
+
+## Publishing a Crate to Crates.io
+We’ve used packages from crates.io as dependencies of our project, but you can also share your code with other people by publishing your own packages.
+
+### Making Useful Documentation Comments
+Documentation comments use three slashes, ///, instead of two and support Markdown notation for formatting the text.
+```rust
+/// Adds one to the number given.
+///
+/// # Examples
+///
+/// ```
+/// let arg = 5;
+/// let answer = my_crate::add_one(arg);
+///
+/// assert_eq!(6, answer);
+/// ```
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+```
+> For convenience, running `cargo doc --open` will build the HTML for your current crate’s documentation 
+
+### Commonly Used Sections
+Here are some other sections that crate authors commonly use in their documentation:
+- `# Examples`
+- `# Panics`
+- `# Errors`
+- `# Safety`
+
+### Documentation Comments as Tests
+Adding example code blocks in your documentation comments can help demonstrate how to use your library, and doing so has an additional bonus: running `cargo test` will run the code examples in your documentation as tests!
+
+### Commenting Contained Items
+The style of doc comment `//!` adds documentation to the item that contains the comments rather than to the items following the comments.
+```rust
+//! # My Crate
+//!
+//! `my_crate` is a collection of utilities to make performing certain
+//! calculations more convenient.
+
+/// Adds one to the number given.
+// --snip--
+```
+
+### Exporting a Convenient Public API with pub use
+To remove the internal organization from the public API, we can add `pub use` statements to re-export the items at the top level
+```rust
+//! # Art
+//!
+//! A library for modeling artistic concepts.
+
+pub use self::kinds::PrimaryColor;
+pub use self::kinds::SecondaryColor;
+pub use self::utils::mix;
+
+pub mod kinds {
+    // --snip--
+}
+
+pub mod utils {
+    // --snip--
+}
+```
+
+### Setting Up a Crates.io Account
+Before you can publish any crates, you need to create an account on crates.io and get an API token. 
+```sh
+cargo login abcdefghijklmnopqrstuvwxyz012345
+```
+
+### Adding Metadata to a New Crate
+Let’s say you have a crate you want to publish. Before publishing, you’ll need to add some metadata in the [package] section of the crate’s Cargo.toml file.
+```
+[package]
+name = "guessing_game"
+version = "0.1.0"
+edition = "2021"
+description = "A fun game where you guess what number the computer has chosen."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+```
+
+### Publishing to Crates.io
+Be careful, because a publish is permanent. The version can never be overwritten, and the code cannot be deleted. 
+```sh
+cargo publish
+```
+
+### Publishing a New Version of an Existing Crate
+When you’ve made changes to your crate and are ready to release a new version, you change the version value specified in your Cargo.toml file and republish.
+
+### Deprecating Versions from Crates.io with cargo yank
+Although you can’t remove previous versions of a crate, you can prevent any future projects from adding them as a new dependency.
+```
+$ cargo yank --vers 1.0.1
+    Updating crates.io index
+        Yank guessing_game@1.0.1
+```
+
+## Cargo Workspaces
+Cargo offers a feature called workspaces that can help manage multiple related packages that are developed in tandem.
+
+### Creating a Workspace
+A workspace is a set of packages that share the same Cargo.lock and output directory. 
+```
+[workspace]
+
+members = [
+    "adder",
+]
+
+$ cargo new adder
+     Created binary (application) `adder` package
+
+├── Cargo.lock
+├── Cargo.toml
+├── adder
+│   ├── Cargo.toml
+│   └── src
+│       └── main.rs
+└── target
+```
+
+### Creating the Second Package in the Workspace
+Next, let’s create another member package in the workspace and call it add_one. Change the top-level Cargo.toml to specify the add_one path in the members list:
+```
+[workspace]
+
+members = [
+    "adder",
+    "add_one",
+]
+
+$ cargo new add_one --lib
+     Created library `add_one` package
+
+├── Cargo.lock
+├── Cargo.toml
+├── add_one
+│   ├── Cargo.toml
+│   └── src
+│       └── lib.rs
+├── adder
+│   ├── Cargo.toml
+│   └── src
+│       └── main.rs
+└── target
+
+```
+
+In the add_one/src/lib.rs file, let’s add an add_one function:
+```rust
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+```
+
+Now we can have the adder package with our binary depend on the add_one package that has our library.
+```
+[dependencies]
+add_one = { path = "../add_one" }
+```
+
+Next, let’s use the add_one function (from the add_one crate) in the adder crate. 
+```rust
+use add_one;
+
+fn main() {
+    let num = 10;
+    println!("Hello, world! {num} plus one is {}!", add_one::add_one(num));
+}
+```
+
+To run the binary crate from the add directory, we can specify which package in the workspace we want to run by using the -p argument and the package name with cargo run
+```
+$ cargo run -p adder
+    Finished dev [unoptimized + debuginfo] target(s) in 0.0s
+     Running `target/debug/adder`
+Hello, world! 10 plus one is 11!
+```
+
+### Depending on an External Package in a Workspace
+Notice that the workspace has only one Cargo.lock file at the top level, rather than having a Cargo.lock in each crate’s directory. 
+
+### Adding a Test to a Workspace
+For another enhancement, let’s add a test of the add_one::add_one function within the add_one crate:
+```rust
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(3, add_one(2));
+    }
+}
+```
+> Now run cargo test in the top-level add directory. Running cargo test in a workspace structured like this one will run the tests for all the crates in the workspace
+
+We can also run tests for one particular crate in a workspace from the top-level directory by using the -p flag and specifying the name of the crate we want to test:
+```sh
+cargo test -p add_one
+```
+
+## Installing Binaries with cargo install
+The cargo install command allows you to install and use binary crates locally. 
+```sh
+cargo install ripgrep
+```
+
+## Extending Cargo with Custom Commands
+Cargo is designed so you can extend it with new subcommands without having to modify Cargo. If a binary in your $PATH is named cargo-something, you can run it as if it was a Cargo subcommand by running cargo something. Custom commands like this are also listed when you run cargo --list. Being able to use cargo install to install extensions and then run them just like the built-in Cargo tools is a super convenient benefit of Cargo’s design!
